@@ -73,6 +73,8 @@ EVENT_SUBSCRIBERS = set()
 EVENT_HISTORY = []
 EVENT_HISTORY_LIMIT = 200
 APPROVAL_SUBSCRIBERS = {}
+SSE_HEARTBEAT_INTERVAL_SECONDS = 15
+SSE_RETRY_MS = 3000
 
 # ---------------------------------------------------------------------------
 # 数据读写
@@ -242,6 +244,15 @@ async def publish_event(event: dict):
 
 def _approval_key(slug: str, visitor_id: str) -> str:
     return f"{slug}:{visitor_id}"
+
+
+def _sse_control_frame(comment: str = "connected") -> str:
+    """发送首帧控制信息，避免客户端在空闲连接上读超时。"""
+    return f"retry: {SSE_RETRY_MS}\n: {comment}\n\n"
+
+
+def _sse_ping_frame() -> str:
+    return ": ping\n\n"
 
 
 async def publish_approval_event(slug: str, visitor_id: str, status: str):
@@ -1015,16 +1026,20 @@ async def check_approval_stream(slug: str, request: Request):
                 yield 'event: status\ndata: {"status":"not_requested"}\n\n'
                 return
             yield 'event: status\ndata: {"status":"pending"}\n\n'
+            last_sent_at = time.monotonic()
             while True:
                 if await request.is_disconnected():
                     break
                 try:
-                    event = await asyncio.wait_for(queue.get(), timeout=55)
+                    timeout = max(0.1, SSE_HEARTBEAT_INTERVAL_SECONDS - (time.monotonic() - last_sent_at))
+                    event = await asyncio.wait_for(queue.get(), timeout=timeout)
                     yield f'event: status\ndata: {json.dumps(event, ensure_ascii=False)}\n\n'
+                    last_sent_at = time.monotonic()
                     if event.get("status") in ("approved", "rejected"):
                         break
                 except asyncio.TimeoutError:
-                    yield ': ping\n\n'
+                    yield _sse_ping_frame()
+                    last_sent_at = time.monotonic()
         finally:
             if key in APPROVAL_SUBSCRIBERS:
                 APPROVAL_SUBSCRIBERS[key].discard(queue)
@@ -1082,22 +1097,31 @@ async def event_stream(request: Request, user=Depends(verify_admin)):
         queue = asyncio.Queue()
         EVENT_SUBSCRIBERS.add(queue)
         try:
+            yield _sse_control_frame()
+            last_sent_at = time.monotonic()
             if last_event_id:
                 replay = False
                 for item in EVENT_HISTORY:
                     if replay and _event_belongs_to_user(item):
                         yield f"id: {item['id']}\nevent: {item['type']}\ndata: {json.dumps(item, ensure_ascii=False)}\n\n"
+                        last_sent_at = time.monotonic()
                     elif item["id"] == last_event_id:
                         replay = True
             while True:
                 if await request.is_disconnected():
                     break
                 try:
-                    event = await asyncio.wait_for(queue.get(), timeout=55)
+                    timeout = max(0.1, SSE_HEARTBEAT_INTERVAL_SECONDS - (time.monotonic() - last_sent_at))
+                    event = await asyncio.wait_for(queue.get(), timeout=timeout)
                     if _event_belongs_to_user(event):
                         yield f"id: {event['id']}\nevent: {event['type']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+                        last_sent_at = time.monotonic()
+                    elif time.monotonic() - last_sent_at >= SSE_HEARTBEAT_INTERVAL_SECONDS:
+                        yield _sse_ping_frame()
+                        last_sent_at = time.monotonic()
                 except asyncio.TimeoutError:
-                    yield ": ping\n\n"
+                    yield _sse_ping_frame()
+                    last_sent_at = time.monotonic()
         finally:
             EVENT_SUBSCRIBERS.discard(queue)
 
