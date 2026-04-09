@@ -3,10 +3,10 @@
 PageGate OpenClaw Skill 初始化向导
 
 交互式引导用户完成：
-1. 选择服务器（默认公共服务器 / 自建服务器）
-2. 配置连接参数（URL + Admin Token）
+1. 选择接入方式（托管服务器 / 自部署服务器）
+2. 获取 PageGate API token（注册 / 登录 / 使用已有 token）
 3. 验证服务器连通性
-4. 识别 OpenClaw 微信通道配置
+4. 识别 OpenClaw 通知通道配置
 5. 写入 .env 配置文件
 6. 启动 watcher 并发送测试消息
 7. 验证端到端通路
@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import time
+import getpass
 from pathlib import Path
 from urllib import error, request
 
@@ -91,6 +92,18 @@ def ask(prompt, default=""):
     return ans or default
 
 
+def ask_secret(prompt):
+    try:
+        if sys.stdin.isatty():
+            ans = getpass.getpass(f"  {prompt}: ").strip()
+        else:
+            ans = input(f"  {prompt}: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        sys.exit(1)
+    return ans
+
+
 def ask_yn(prompt, default=True):
     hint = "Y/n" if default else "y/N"
     ans = ask(f"{prompt} ({hint})", "y" if default else "n")
@@ -113,22 +126,26 @@ def ask_choice(prompt, options):
 
 # ── Step 1: 选择服务器 ────────────────────────────────────────────
 def choose_server():
-    step(1, 6, "选择 PageGate 服务器")
+    step(1, 6, "选择 PageGate 接入方式")
     print()
-    choice = ask_choice("请选择", [
-        (f"使用默认公共服务器 ({DEFAULT_SERVER_URL})", "default"),
-        ("连接到我自己搭建的服务器", "custom"),
-        ("我还没有服务器，帮我搭建一个", "guide"),
+    mode = ask_choice("请选择", [
+        (f"使用托管服务器（推荐，{DEFAULT_SERVER_URL}）", "hosted"),
+        ("使用自部署服务器", "self_hosted"),
     ])
 
-    if choice == "default":
-        url = DEFAULT_SERVER_URL
-        ok(f"使用默认服务器: {url}")
-        return url
+    if mode == "hosted":
+        ok(f"使用托管服务器: {DEFAULT_SERVER_URL}")
+        return mode, DEFAULT_SERVER_URL
+
+    print()
+    choice = ask_choice("请选择", [
+        ("连接到已经部署好的服务器", "custom"),
+        ("我还没有服务器，先看部署步骤", "guide"),
+    ])
 
     if choice == "guide":
         print()
-        print(bold("  自建服务器步骤："))
+        print(bold("  自部署服务器步骤："))
         print(f"""
     1. 克隆代码仓库:
        {cyan(f'git clone {GITHUB_REPO}')}
@@ -138,7 +155,7 @@ def choose_server():
 
     3. 创建配置文件:
        {cyan('cp config.example.yaml config.yaml')}
-       编辑 config.yaml，设置 admin_token 和 base_url
+       编辑 config.yaml，设置 admin_token（服务器管理员使用）和 base_url
 
     4. 启动服务:
        {cyan('python3 server.py')}
@@ -151,26 +168,136 @@ def choose_server():
             print()
             info("请先搭建好服务器，然后重新运行此脚本。")
             sys.exit(0)
-        # fall through to custom
 
     url = ask("请输入服务器地址（如 http://your-server:8888）").rstrip("/")
     if not url.startswith("http"):
         url = "http://" + url
     ok(f"服务器地址: {url}")
-    return url
+    return mode, url
 
 
-# ── Step 2: 配置 Admin Token ──────────────────────────────────────
-def configure_token(url):
-    step(2, 6, "配置管理员令牌 (Admin Token)")
+# ── Step 2: 获取 PageGate API token ───────────────────────────────
+def post_json(base_url, path, payload):
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = request.Request(
+        base_url + path,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+        data=data,
+    )
+    with request.urlopen(req, timeout=10) as resp:
+        body = resp.read().decode("utf-8")
+        return json.loads(body) if body else {"ok": True}
+
+
+def register_account(url):
+    while True:
+        print()
+        email = ask("请输入注册邮箱")
+        password = ask_secret("请输入密码")
+        password_confirm = ask_secret("请再次输入密码")
+
+        if not email:
+            fail("邮箱不能为空")
+            continue
+        if len(password) < 6:
+            fail("密码至少需要 6 个字符")
+            continue
+        if password != password_confirm:
+            fail("两次输入的密码不一致")
+            continue
+
+        try:
+            result = post_json(url, "/api/auth/register", {
+                "email": email,
+                "password": password,
+            })
+            ok(f"注册成功: {result.get('email', email)}")
+            return result["token"]
+        except error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            fail(f"注册失败 (HTTP {e.code})")
+            if body:
+                info(body[:300])
+            if e.code == 409 and ask_yn("该邮箱可能已经注册。是否改为登录？"):
+                return login_account(url, default_email=email)
+            if e.code == 403 and ask_yn("服务器可能关闭了注册。是否改为登录？"):
+                return login_account(url, default_email=email)
+        except error.URLError as e:
+            fail(f"注册请求失败: {e.reason}")
+        except Exception as e:
+            fail(f"注册失败: {e}")
+
+        if not ask_yn("是否重试注册？"):
+            sys.exit(1)
+
+
+def login_account(url, default_email=""):
+    while True:
+        print()
+        email = ask("请输入登录邮箱", default_email)
+        password = ask_secret("请输入密码")
+
+        if not email:
+            fail("邮箱不能为空")
+            continue
+        if not password:
+            fail("密码不能为空")
+            continue
+
+        try:
+            result = post_json(url, "/api/auth/login", {
+                "email": email,
+                "password": password,
+            })
+            ok(f"登录成功: {result.get('email', email)}")
+            return result["token"]
+        except error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            fail(f"登录失败 (HTTP {e.code})")
+            if body:
+                info(body[:300])
+        except error.URLError as e:
+            fail(f"登录请求失败: {e.reason}")
+        except Exception as e:
+            fail(f"登录失败: {e}")
+
+        if not ask_yn("是否重试登录？"):
+            sys.exit(1)
+
+
+def configure_token(url, server_mode):
+    step(2, 6, "获取 PageGate API token")
     print()
-    info("Admin Token 在服务器的 config.yaml 中设置。")
-    info("如果使用默认公共服务器，请联系管理员获取你的专属 token。")
-    print()
-    token = ask("请输入 Admin Token")
+    info("这里会保存 PageGate API token。")
+    if server_mode == "hosted":
+        info("使用托管服务器时，普通用户直接注册或登录即可。")
+        info("不需要服务器管理员提供 admin_token。")
+        print()
+        choice = ask_choice("请选择", [
+            ("注册新账号（首次使用推荐）", "register"),
+            ("登录已有账号", "login"),
+        ])
+    else:
+        info("如果你的自部署服务器开启了 registration.open，你也可以直接注册普通账号。")
+        info("如果服务器关闭了注册，再使用现有 PageGate API token 连接。")
+        print()
+        choice = ask_choice("请选择", [
+            ("注册新账号（服务器支持注册时推荐）", "register"),
+            ("登录已有账号", "login"),
+            ("我已经有 PageGate API token", "token"),
+        ])
+
+    if choice == "register":
+        return register_account(url)
+    if choice == "login":
+        return login_account(url)
+
+    token = ask("请输入已有的 PageGate API token（不要填写 config.yaml 里的 admin_token）")
     if not token:
-        fail("Admin Token 不能为空")
+        fail("PageGate API token 不能为空")
         sys.exit(1)
+    ok("已记录现有 API token")
     return token
 
 
@@ -188,7 +315,7 @@ def verify_connection(url, token):
         return True
     except error.HTTPError as e:
         if e.code == 401 or e.code == 403:
-            fail(f"认证失败 (HTTP {e.code})，请检查 Admin Token 是否正确")
+            fail(f"认证失败 (HTTP {e.code})，请检查 PageGate API token 是否正确")
         else:
             fail(f"服务器返回错误: HTTP {e.code}")
             body = e.read().decode("utf-8", errors="replace")
@@ -204,7 +331,7 @@ def verify_connection(url, token):
         return False
 
 
-# ── Step 4: OpenClaw 微信通道配置 ─────────────────────────────────
+# ── Step 4: OpenClaw 通知通道配置 ─────────────────────────────────
 def configure_openclaw_channel():
     step(4, 6, "配置 OpenClaw 通知通道")
     print()
@@ -228,7 +355,7 @@ def configure_openclaw_channel():
     print()
     print(bold("  通道配置说明："))
     print(f"""
-    通知通道用于将 PageGate 的审批请求转发到你的微信。
+    通知通道用于将 PageGate 的审批请求转发到你的消息通道。
     你需要提供三个参数：
 
     • {bold('OPENCLAW_NOTIFY_CHANNEL')} — 通道名称
@@ -308,7 +435,8 @@ def write_env_file(url, token, channel, target, account):
 
 # PageGate 服务器
 PAGEGATE_URL={url}
-PAGEGATE_ADMIN_TOKEN={token}
+# PageGate API token
+PAGEGATE_API_TOKEN={token}
 
 # OpenClaw 通知通道
 OPENCLAW_NOTIFY_CHANNEL={channel}
@@ -344,7 +472,7 @@ def test_notification(channel, target, account):
         return False
 
     print()
-    info("即将通过 OpenClaw 发送一条测试消息到你的微信...")
+    info("即将通过 OpenClaw 发送一条测试消息到你的通知通道...")
     if not ask_yn("确认发送？"):
         info("跳过测试通知")
         return False
@@ -378,7 +506,7 @@ def test_notification(channel, target, account):
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
         if result.returncode == 0:
             ok("测试消息发送成功！")
-            info("请检查你的微信，确认是否收到了测试消息。")
+            info("请检查你的通知通道，确认是否收到了测试消息。")
             return True
         else:
             fail("发送失败")
@@ -440,14 +568,14 @@ def print_summary(url, test_ok, log_file):
 def main():
     banner("PageGate OpenClaw Skill 初始化向导")
     print()
-    print("  本向导将帮助你完成 PageGate 通知系统的配置，")
-    print("  让你可以在微信中接收和处理页面访问审批请求。")
+    print("  本向导将帮助你完成 PageGate 的首次接入配置，")
+    print("  包括选择服务器、获取 PageGate API token、配置通知路由以及启动 watcher。")
 
     # Step 1: 选择服务器
-    url = choose_server()
+    server_mode, url = choose_server()
 
-    # Step 2: Admin Token
-    token = configure_token(url)
+    # Step 2: PageGate API token
+    token = configure_token(url, server_mode)
 
     # Step 3: 验证连通性
     if not verify_connection(url, token):

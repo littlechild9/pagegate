@@ -23,7 +23,7 @@ def env(name: str, required: bool = True) -> str:
 
 
 base_url = env("PAGEGATE_URL")
-admin_token = env("PAGEGATE_ADMIN_TOKEN")
+api_token = env("PAGEGATE_API_TOKEN")
 notify_channel = env("OPENCLAW_NOTIFY_CHANNEL")
 notify_target = env("OPENCLAW_NOTIFY_TARGET")
 notify_account = env("OPENCLAW_NOTIFY_ACCOUNT")
@@ -157,7 +157,7 @@ def deliver_event(state, event):
 def fetch_pending():
     req = request.Request(
         base_url + "/api/pending",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        headers={"Authorization": f"Bearer {api_token}"},
     )
     with request.urlopen(req, timeout=10) as resp:
         return json.loads(resp.read().decode("utf-8"))
@@ -188,7 +188,7 @@ def stream_events():
                 url += "?last_event_id=" + quote(state["last_event_id"], safe="")
             req = request.Request(
                 url,
-                headers={"Authorization": f"Bearer {admin_token}", "Accept": "text/event-stream"},
+                headers={"Authorization": f"Bearer {api_token}", "Accept": "text/event-stream"},
             )
             with request.urlopen(req, timeout=60) as resp:
                 event_type = None

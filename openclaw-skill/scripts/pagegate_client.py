@@ -19,14 +19,14 @@ def env(name: str) -> str:
 
 
 BASE_URL = env("PAGEGATE_URL")
-ADMIN_TOKEN = env("PAGEGATE_ADMIN_TOKEN")
+API_TOKEN = env("PAGEGATE_API_TOKEN")
 
 
 def api_request(path: str, method: str = "GET", data: Optional[bytes] = None, content_type: Optional[str] = None) -> Any:
     req = request.Request(
         BASE_URL + path,
         method=method,
-        headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
+        headers={"Authorization": f"Bearer {API_TOKEN}"},
         data=data,
     )
     if content_type:

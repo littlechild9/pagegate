@@ -52,50 +52,25 @@ PageGate 最重要的 feature 不是上传页面，而是实时授权。
 
 ### 最简单的开始方式
 
-如果你只是想用起来，不要先研究部署。
+如果你只是想用起来，不要先研究部署，也不要先准备任何 token。
 
-然后直接把下面这段话贴给 OpenClaw：
-
-```text
-请帮我配置 PageGate。
-
-要求：
-- 优先使用默认公共服务器 http://115.190.148.77:8888
-- 只使用 OpenClaw 的 SSE watcher，不要配置 webhook
-- 如果缺少公共服务器账号、PAGEGATE_ADMIN_TOKEN 或通知路由，请逐项向我询问
-- 先执行这个安装命令（它会从 GitHub 下载 skill 并进入安装流程）：
-  curl -fsSL https://raw.githubusercontent.com/littlechild9/pagegate/main/openclaw-skill/install.sh | bash
-- 如果安装脚本询问是否运行初始化向导，请选择 Y，并继续完成 setup.py
-- 配置完成后启动 watcher
-- 最后告诉我如何发布一个本地 HTML 页面
-```
-
-这就是推荐入口。
-
-默认公共服务器：
+直接把下面这段话贴给 OpenClaw：
 
 ```text
-http://115.190.148.77:8888
+请先下载安装 PageGate 的 OpenClaw skill，并开始 PageGate onboard。
+
+安装命令：
+curl -fsSL https://raw.githubusercontent.com/littlechild9/pagegate/main/openclaw-skill/install.sh | bash
+
+如果安装脚本询问是否运行初始化向导，请选择 Y。
 ```
 
-OpenClaw 会继续引导你补齐当前需要的信息，例如：
-
-- 公共服务器账号或登录信息
-- `PAGEGATE_ADMIN_TOKEN`
-- OpenClaw 的通知路由
-- 本地 HTML 文件路径
-- 页面的 `slug`、标题和访问模式
+后续的托管服务器 / 自部署服务器选择、注册 / 登录、PageGate API token 保存、通知路由和 watcher 启动，都在 onboard 流程里完成。托管模式会默认使用 `http://115.190.148.77:8888`。
 
 配置完成后，你通常只需要继续对 OpenClaw 说：
 
 ```text
 把 /absolute/path/page.html 发布到 PageGate，slug 用 my-page，标题用 我的页面，access 用 approval。
-```
-
-如果你想手工打开 Dashboard：
-
-```text
-http://115.190.148.77:8888/dashboard?token=<token>
 ```
 
 ### OpenClaw skill 是怎么接进来的
@@ -209,20 +184,13 @@ ${server.base_url}/auth/wechat/callback
 
 ### 自托管之后，还是一句话交给 OpenClaw
 
-当你的自托管服务器准备好之后，继续把下面这段话贴给 OpenClaw，把域名和 token 换成你自己的：
+当你的自托管服务器准备好之后，继续把下面这段话贴给 OpenClaw，把域名换成你自己的：
 
 ```text
-请帮我配置 PageGate。
+请开始 PageGate onboard，并使用我自托管的服务器 https://your-domain.com。
 
-要求：
-- 使用我自托管的服务器 https://your-domain.com
-- 我的 PAGEGATE_ADMIN_TOKEN 是 <your-admin-token>
-- 只使用 OpenClaw 的 SSE watcher，不要配置 webhook
-- 先执行这个安装命令（它会从 GitHub 下载 skill 并进入安装流程）：
-  curl -fsSL https://raw.githubusercontent.com/littlechild9/pagegate/main/openclaw-skill/install.sh | bash
-- 如果安装脚本询问是否运行初始化向导，请选择 Y，并继续完成 setup.py
-- 配置完成后启动 watcher
-- 最后告诉我如何发布一个本地 HTML 页面
+如果服务器支持注册，请直接引导我注册或登录。
+如果服务器关闭注册，再向我询问现有的 PageGate API token。
 ```
 
 如果你是通过 `bash scripts/run_server.sh user@your-server your-domain.com` 部署的，脚本结束时会直接显示 dashboard 地址和 super-admin token。

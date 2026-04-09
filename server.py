@@ -512,7 +512,7 @@ async def dashboard(request: Request, user=Depends(verify_admin)):
         "request": request,
         "categories": categories,
         "base_url": BASE_URL,
-        "admin_token": user["token"],
+        "api_token": user["token"],
     })
 
 

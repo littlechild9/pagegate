@@ -1,28 +1,40 @@
 ---
 name: pagegate-client
-description: Manage a deployed PageGate from OpenClaw chat. Use when publishing local HTML files to PageGate, listing pages, updating page metadata or access mode, checking pending visitors, approving or rejecting access requests, or bridging real-time PageGate approval events into an active OpenClaw session. Requires PAGEGATE_URL, PAGEGATE_ADMIN_TOKEN, OPENCLAW_NOTIFY_CHANNEL, OPENCLAW_NOTIFY_TARGET, and OPENCLAW_NOTIFY_ACCOUNT for the realtime bridge.
+description: Onboard and manage PageGate from OpenClaw chat. On first use, ask whether the user wants the managed hosted server (recommended) or a self-hosted server, then guide registration/login or reuse an existing PageGate API token, configure OpenClaw notify routing, and start the realtime watcher. Also use this skill when publishing local HTML files to PageGate, checking pending visitors, approving or rejecting access requests, or updating page metadata and access mode.
 ---
 
 # PageGate Client
 
 Use this skill as the chat-side client for a deployed PageGate server.
 
-## 初始化设置 (First-time Setup)
+## Onboarding
 
-首次使用前，运行初始化向导完成配置：
+首次使用，或者缺少 `.env` / `PAGEGATE_URL` / `PAGEGATE_API_TOKEN` 时，不要先追问底层环境变量。直接开始 onboarding。
+
+优先使用初始化向导：
 
 ```bash
 python3 scripts/setup.py
 ```
 
-向导会引导你完成以下步骤：
+onboarding 的顺序必须是：
 
-1. **选择服务器** — 使用默认公共服务器（115.190.148.77:8888）或连接自建服务器
-2. **配置 Admin Token** — 输入服务器管理令牌
-3. **验证连通性** — 自动测试服务器是否可达
-4. **配置微信通道** — 设置 OpenClaw 通知通道（channel、target、account）
-5. **保存配置** — 自动生成 `.env` 文件
-6. **发送测试消息** — 验证微信通知链路是否正常
+1. 先问用户：`托管服务器（推荐）` 还是 `自部署服务器`
+2. 如果用户选择托管服务器：
+   - 默认服务器使用 `http://115.190.148.77:8888`
+   - 直接引导普通用户 `注册新账号` 或 `登录已有账号`
+   - 不要向托管服务器普通用户索取服务器 `admin_token`
+   - 只有用户明确说自己已经有 `PageGate API token` 时，才直接复用它
+3. 如果用户选择自部署服务器：
+   - 继续问：`已经有服务器` 还是 `需要先部署`
+   - 如果还没部署，先引导部署，再继续 onboarding
+   - 如果服务器支持注册，先引导普通用户注册或登录；不要默认要求服务器 `admin_token`
+   - 如果服务器关闭注册，或用户明确说自己已经有 token，再让用户提供现有 `PageGate API token`
+4. 获取到 PageGate API token 后，再配置 OpenClaw 通知路由
+5. 保存 `.env`
+6. 启动 watcher
+
+`PAGEGATE_API_TOKEN` 保存的是 PageGate API token。托管服务器普通用户的注册 / 登录 token，或者自部署服务器上可用的访问 token，都放在这里。服务器配置里的 `admin_token` 只属于自部署服务器管理员，不属于普通用户 onboarding 输入项。
 
 ### 自建服务器
 
@@ -43,17 +55,19 @@ python3 server.py
 
 任何时候都可以重新运行 `python3 scripts/setup.py` 来更新配置。
 
-## Required environment
+## Runtime environment
 
-Expect these environment variables to exist before making API calls:
+完成 onboarding 后，才期望这些环境变量存在：
 
 - `PAGEGATE_URL`
-- `PAGEGATE_ADMIN_TOKEN`
+- `PAGEGATE_API_TOKEN`
 
-If either is missing, stop and tell the user exactly what is missing.
+如果缺少其中任意一项，不要直接让用户手工 export；优先重新运行 `python3 scripts/setup.py` 进入 onboarding。
 
 ## Files and API behavior
 
+- Register a new account through `/api/auth/register`.
+- Login through `/api/auth/login`.
 - Publish local HTML by uploading a file with multipart form data to `/api/publish`.
 - Manage existing pages through `/api/pages/{slug}` and related visitor endpoints.
 - Read pending approvals from `/api/pending`.
@@ -100,9 +114,10 @@ For page management tasks where the server lacks a list API, inspect local `data
 **Preferred: use the launcher script** (handles output redirection automatically):
 
 ```bash
-# First time: copy .env.example and fill in your tokens
-cp .env.example .env
-# Edit .env with your actual values
+# First time: prefer running the setup wizard
+python3 scripts/setup.py
+# Or copy .env.example and fill in the values manually
+# cp .env.example .env
 
 # Start the watcher
 ./scripts/start-watcher.sh
@@ -123,7 +138,7 @@ python3 scripts/pagegate_watch.py >> ~/.openclaw/workspace/memory/pagegate-watch
 Required environment for the bridge:
 
 - `PAGEGATE_URL`
-- `PAGEGATE_ADMIN_TOKEN`
+- `PAGEGATE_API_TOKEN`
 - `OPENCLAW_NOTIFY_CHANNEL`
 - `OPENCLAW_NOTIFY_TARGET`
 - `OPENCLAW_NOTIFY_ACCOUNT`
