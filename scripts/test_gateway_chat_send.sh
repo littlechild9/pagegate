@@ -4,7 +4,7 @@ set -euo pipefail
 : "${OPENCLAW_SESSION_KEY:?Set OPENCLAW_SESSION_KEY first}"
 
 MESSAGE="${1:-gateway rpc test via chat.send}"
-IDEMPOTENCY_KEY="${OPENCLAW_IDEMPOTENCY_KEY:-htmlhub-chat-send-$(date +%s)}"
+IDEMPOTENCY_KEY="${OPENCLAW_IDEMPOTENCY_KEY:-pagegate-chat-send-$(date +%s)}"
 
 PARAMS=$(python3 - <<'PY' "$OPENCLAW_SESSION_KEY" "$MESSAGE" "$IDEMPOTENCY_KEY"
 import json, sys

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# HTML Hub 一键部署脚本
+# PageGate 一键部署脚本
 # 适用于 Ubuntu 20.04+ / Debian 11+
 # 用法: sudo bash deploy.sh your-domain.com
 # ============================================================
@@ -8,13 +8,13 @@
 set -e
 
 DOMAIN="${1:?请提供域名，用法: sudo bash deploy.sh your-domain.com}"
-APP_DIR="/opt/htmlhub"
+APP_DIR="/opt/pagegate"
 APP_USER="www-data"
 PYTHON="python3"
 ADMIN_TOKEN="$(grep '^admin_token:' "$APP_DIR/config.yaml" | head -1 | sed -E 's/^admin_token:[[:space:]]*"(.*)"/\1/' | sed -E "s/^admin_token:[[:space:]]*'?([^']*)'?$/\1/")"
 
 echo "============================================"
-echo "  HTML Hub 部署脚本"
+echo "  PageGate 部署脚本"
 echo "  域名: $DOMAIN"
 echo "============================================"
 
@@ -53,7 +53,7 @@ chown -R "$APP_USER":"$APP_USER" "$APP_DIR/data" "$APP_DIR/pages"
 # 4. 配置 Nginx
 # ----------------------------------------------------------
 echo ">>> [4/6] 配置 Nginx..."
-cat > "/etc/nginx/sites-available/htmlhub" <<NGINX
+cat > "/etc/nginx/sites-available/pagegate" <<NGINX
 server {
     listen 80;
     server_name $DOMAIN;
@@ -70,7 +70,7 @@ server {
 }
 NGINX
 
-ln -sf /etc/nginx/sites-available/htmlhub /etc/nginx/sites-enabled/htmlhub
+ln -sf /etc/nginx/sites-available/pagegate /etc/nginx/sites-enabled/pagegate
 # 移除默认站点（如果存在）
 rm -f /etc/nginx/sites-enabled/default
 
@@ -97,9 +97,9 @@ echo "    证书自动续期已配置（certbot 自带 systemd timer）"
 # 6. 配置 systemd 服务
 # ----------------------------------------------------------
 echo ">>> [6/6] 配置 systemd 服务..."
-cat > /etc/systemd/system/htmlhub.service <<SYSTEMD
+cat > /etc/systemd/system/pagegate.service <<SYSTEMD
 [Unit]
-Description=HTML Hub - AI HTML Page Sharing Server
+Description=PageGate - AI HTML Page Sharing Server
 After=network.target
 
 [Service]
@@ -117,8 +117,8 @@ WantedBy=multi-user.target
 SYSTEMD
 
 systemctl daemon-reload
-systemctl enable htmlhub
-systemctl restart htmlhub
+systemctl enable pagegate
+systemctl restart pagegate
 
 echo ""
 echo "============================================"
@@ -134,9 +134,9 @@ else
 fi
 echo ""
 echo "  管理命令:"
-echo "    查看状态:  systemctl status htmlhub"
-echo "    查看日志:  journalctl -u htmlhub -f"
-echo "    重启服务:  systemctl restart htmlhub"
+echo "    查看状态:  systemctl status pagegate"
+echo "    查看日志:  journalctl -u pagegate -f"
+echo "    重启服务:  systemctl restart pagegate"
 echo ""
 echo "  SSL 证书会自动续期，无需手动操作。"
 echo "  如需手动续期: certbot renew"

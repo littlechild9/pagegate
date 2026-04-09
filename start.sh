@@ -1,5 +1,5 @@
 #!/bin/bash
-# HTML Hub 启动脚本
+# PageGate 启动脚本
 # 用法: bash start.sh
 
 cd "$(dirname "$0")"
@@ -45,7 +45,7 @@ if ! python -c "import fastapi" 2>/dev/null; then
     pip install -q -r requirements.txt
 fi
 
-echo "启动 HTML Hub..."
+echo "启动 PageGate..."
 python server.py &
 echo $! > .pid
 echo "PID: $(cat .pid)"

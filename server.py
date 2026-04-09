@@ -1,5 +1,5 @@
 """
-HTML Hub — 一个简单的 Python 服务器，用于发布、管理和分享 AI 生成的 HTML 页面。
+PageGate — 一个简单的 Python 服务器，用于发布、管理和分享 AI 生成的 HTML 页面。
 """
 
 import asyncio
@@ -17,7 +17,7 @@ import bcrypt
 import httpx
 import yaml
 
-logger = logging.getLogger("htmlhub")
+logger = logging.getLogger("pagegate")
 from fastapi import (
     Depends,
     FastAPI,
@@ -67,7 +67,7 @@ OPENCLAW_WEBHOOK_TOKEN = OPENCLAW_CONFIG.get("webhook_token", "")
 
 signer = TimestampSigner(SESSION_SECRET)
 
-app = FastAPI(title="HTML Hub", docs_url=None, redoc_url=None)
+app = FastAPI(title="PageGate", docs_url=None, redoc_url=None)
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 EVENT_SUBSCRIBERS = set()
 EVENT_HISTORY = []
@@ -165,7 +165,7 @@ def find_visitor(visitor_id: str) -> Optional[dict]:
 # Session 管理
 # ---------------------------------------------------------------------------
 
-SESSION_COOKIE = "htmlhub_session"
+SESSION_COOKIE = "pagegate_session"
 SESSION_MAX_AGE = 30 * 24 * 3600  # 30 天
 
 
@@ -278,7 +278,7 @@ async def notify_openclaw(page: dict, visitor: dict):
     payload = {
         "message": event["message"],
         "event": event,
-        "name": "htmlhub-client",
+        "name": "pagegate-client",
         "deliver": True,
     }
 
@@ -1217,5 +1217,5 @@ if __name__ == "__main__":
 
     host = SERVER_CONFIG.get("host", "0.0.0.0")
     port = SERVER_CONFIG.get("port", 8000)
-    print(f"🚀 HTML Hub running at http://{host}:{port}")
+    print(f"🚀 PageGate running at http://{host}:{port}")
     uvicorn.run(app, host=host, port=port)

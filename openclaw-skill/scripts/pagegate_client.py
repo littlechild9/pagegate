@@ -15,11 +15,11 @@ def env(name: str) -> str:
     if not value:
         print(f"Missing required environment variable: {name}", file=sys.stderr)
         sys.exit(2)
-    return value.rstrip("/") if name == "HTMLHUB_URL" else value
+    return value.rstrip("/") if name == "PAGEGATE_URL" else value
 
 
-BASE_URL = env("HTMLHUB_URL")
-ADMIN_TOKEN = env("HTMLHUB_ADMIN_TOKEN")
+BASE_URL = env("PAGEGATE_URL")
+ADMIN_TOKEN = env("PAGEGATE_ADMIN_TOKEN")
 
 
 def api_request(path: str, method: str = "GET", data: Optional[bytes] = None, content_type: Optional[str] = None) -> Any:
@@ -45,7 +45,7 @@ def api_request(path: str, method: str = "GET", data: Optional[bytes] = None, co
 
 
 def encode_multipart(fields, file_field: str, file_path: str):
-    boundary = f"----htmlhub-{uuid.uuid4().hex}"
+    boundary = f"----pagegate-{uuid.uuid4().hex}"
     chunks = []
 
     for key, value in fields.items():
@@ -130,7 +130,7 @@ def cmd_revoke(args):
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
-parser = argparse.ArgumentParser(description="HTML Hub client")
+parser = argparse.ArgumentParser(description="PageGate client")
 sub = parser.add_subparsers(dest="command", required=True)
 
 p = sub.add_parser("publish")

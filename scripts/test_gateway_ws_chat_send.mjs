@@ -34,7 +34,7 @@ if (!gatewayToken) {
 }
 
 const reqId = crypto.randomUUID();
-const idem = `htmlhub-ws-${Date.now()}`;
+const idem = `pagegate-ws-${Date.now()}`;
 let challengeSeen = false;
 let connected = false;
 

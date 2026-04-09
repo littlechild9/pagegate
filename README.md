@@ -1,19 +1,27 @@
-# HTML Hub
+# PageGate
 
-一个简单的自托管工具，用于发布和分享 AI 生成的 HTML 页面。
+> A personal HTML hub with built-in access control for the vibe-coding era.
 
-支持公开访问、审批制访问（通过钉钉/微信登录鉴权），以及管理后台。
+## Vision
 
-## 公共服务器
+In the age of AI-assisted coding, HTML has become the better document format. With a single prompt, anyone can generate rich, interactive pages -- no design skills required. People are creating HTML pages for personal use every day and sharing them with family, friends, and colleagues.
 
-我们提供了一个公共实例供大家直接使用，无需自行部署：
+**PageGate** is built for this personal HTML era. Unlike generic HTML hosting services, PageGate gives you a fully controllable access control system as its core feature. You decide exactly who can see each page -- whether it's open to the world, restricted to approved visitors, or completely private.
+
+Authentication is central to this vision. PageGate currently supports **DingTalk OAuth login**, with **WeChat, Feishu, Google, Apple, and GitHub** login coming soon. Each login provider lets you gate access to the people in your life, not just anonymous internet traffic.
+
+This is what sets PageGate apart: it's not just hosting -- it's your personal gateway to sharing HTML with the right people.
+
+## Public Server
+
+We run a public instance so you can get started without self-hosting:
 
 **http://xuanzhang.net:8888**
 
-- 已开放用户注册，注册后即可发布和管理自己的页面
-- 适合快速体验或没有自己服务器的用户
+- Registration is open -- sign up to start publishing and managing your pages
+- Great for trying things out or if you don't have your own server
 
-如果你需要完全掌控数据和配置，也可以按照下面的步骤自行部署。
+If you want full control over your data and configuration, follow the self-hosting guide below.
 
 ---
 
@@ -72,7 +80,7 @@ bash scripts/run_server.sh user@your-server your-domain.com
 本地脚本会自动：
 - 生成或复用 super-admin token，并写入 `.deploy-secrets/your-domain.com.env`
 - 生成部署配置 `.deploy-secrets/your-domain.com.config.yaml`
-- 将代码同步到远端 `/opt/htmlhub`
+- 将代码同步到远端 `/opt/pagegate`
 - 通过 SSH 调用远端 `sudo bash deploy.sh your-domain.com`
 
 远端脚本会自动：
@@ -89,24 +97,24 @@ bash scripts/run_server.sh user@your-server your-domain.com
 
 ```bash
 # 1. 上传项目到服务器
-scp -r htmlhub/ user@your-server:/opt/htmlhub
+scp -r pagegate/ user@your-server:/opt/pagegate
 
 # 2. 在服务器上安装依赖
 ssh user@your-server
-cd /opt/htmlhub
+cd /opt/pagegate
 pip3 install -r requirements.txt
 
 # 3. 创建 systemd 服务
-sudo tee /etc/systemd/system/htmlhub.service > /dev/null <<'EOF'
+sudo tee /etc/systemd/system/pagegate.service > /dev/null <<'EOF'
 [Unit]
-Description=HTML Hub
+Description=PageGate
 After=network.target
 
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/opt/htmlhub
-ExecStart=/usr/bin/python3 /opt/htmlhub/server.py
+WorkingDirectory=/opt/pagegate
+ExecStart=/usr/bin/python3 /opt/pagegate/server.py
 Restart=always
 RestartSec=5
 
@@ -116,11 +124,11 @@ EOF
 
 # 4. 启动
 sudo systemctl daemon-reload
-sudo systemctl enable htmlhub
-sudo systemctl start htmlhub
+sudo systemctl enable pagegate
+sudo systemctl start pagegate
 
 # 查看日志
-sudo journalctl -u htmlhub -f
+sudo journalctl -u pagegate -f
 ```
 
 ### 方式二：Docker
@@ -136,14 +144,14 @@ CMD ["python3", "server.py"]
 ```
 
 ```bash
-docker build -t htmlhub .
+docker build -t pagegate .
 docker run -d \
   -p 8888:8888 \
   -v ./data:/app/data \
   -v ./pages:/app/pages \
   -v ./config.yaml:/app/config.yaml \
-  --name htmlhub \
-  htmlhub
+  --name pagegate \
+  pagegate
 ```
 
 ### Nginx 反向代理（HTTPS）
@@ -241,7 +249,7 @@ curl -X POST https://hub.example.com/api/pages/xian-trip/approve \
 2. 如果你还没有组织，需要先创建一个（个人也可以创建）
 3. 点击左侧菜单「应用开发」
 4. 选择「企业内部开发」→ 点击「创建应用」
-5. 填写应用名称（如 `HTML Hub`）和描述，点击确认
+5. 填写应用名称（如 `PageGate`）和描述，点击确认
 
 ### 第二步：获取 Client ID 和 Client Secret
 
@@ -332,7 +340,7 @@ bash start.sh
 
 1. 进入「管理中心」→「网站应用」→「创建网站应用」
 2. 填写：
-   - 应用名称：HTML Hub
+   - 应用名称：PageGate
    - 应用官网：`https://hub.example.com`
 3. 提交审核（通常 1-7 个工作日）
 
@@ -425,8 +433,8 @@ curl https://hub.example.com/api/pending \
 
 | 模式 | 适用场景 | 原理 |
 |------|---------|------|
-| **Webhook 推送** | OpenClaw 有公网地址 | HTML Hub 主动 POST 到 OpenClaw |
-| **SSE Watcher 拉取** | OpenClaw 在内网/本地 | Watcher 长连接 HTML Hub 的 SSE 端点 |
+| **Webhook 推送** | OpenClaw 有公网地址 | PageGate 主动 POST 到 OpenClaw |
+| **SSE Watcher 拉取** | OpenClaw 在内网/本地 | Watcher 长连接 PageGate 的 SSE 端点 |
 
 两种可以同时启用，也可以只用其中一种。
 
@@ -435,16 +443,16 @@ curl https://hub.example.com/api/pending \
 将 `openclaw-skill/` 目录复制到 OpenClaw 的 skills 目录：
 
 ```bash
-cp -r openclaw-skill ~/.openclaw/workspace/skills/htmlhub-client
+cp -r openclaw-skill ~/.openclaw/workspace/skills/pagegate-client
 ```
 
 ### 第二步：配置环境变量
 
-OpenClaw 需要知道你自己的 HTML Hub 地址和管理员 token：
+OpenClaw 需要知道你自己的 PageGate 地址和管理员 token：
 
 ```bash
-export HTMLHUB_URL="https://hub.example.com"
-export HTMLHUB_ADMIN_TOKEN="your-admin-token"
+export PAGEGATE_URL="https://hub.example.com"
+export PAGEGATE_ADMIN_TOKEN="your-admin-token"
 ```
 
 这些值不要写死进代码里，放在你自己的 shell 配置、launch 脚本或 OpenClaw 运行配置里。
@@ -455,7 +463,7 @@ export HTMLHUB_ADMIN_TOKEN="your-admin-token"
 
 ```yaml
 openclaw:
-  webhook_url: "https://your-openclaw-instance/hooks/htmlhub"
+  webhook_url: "https://your-openclaw-instance/hooks/pagegate"
   webhook_token: "your-openclaw-webhook-token"
 ```
 
@@ -466,8 +474,8 @@ openclaw:
 先配置环境变量：
 
 ```bash
-export HTMLHUB_URL="https://hub.example.com"
-export HTMLHUB_ADMIN_TOKEN="your-admin-token"
+export PAGEGATE_URL="https://hub.example.com"
+export PAGEGATE_ADMIN_TOKEN="your-admin-token"
 export OPENCLAW_SESSION_KEY="你的目标 sessionKey"
 # 可选：当 gateway 不走默认本机配置时再显式指定
 # export OPENCLAW_GATEWAY_URL="ws://127.0.0.1:18789"
@@ -478,17 +486,17 @@ export OPENCLAW_SESSION_KEY="你的目标 sessionKey"
 
 ```bash
 # 在后台运行 bridge watcher（保持长连接，实时接收审批通知）
-nohup python3 ~/.openclaw/workspace/skills/htmlhub-client/scripts/htmlhub_watch.py &
+nohup python3 ~/.openclaw/workspace/skills/pagegate-client/scripts/pagegate_watch.py &
 
 # 或用 systemd / screen / tmux 管理
 ```
 
 Bridge watcher 会：
-- 长连接 HTML Hub 的 `GET /api/events/stream`（SSE）
+- 长连接 PageGate 的 `GET /api/events/stream`（SSE）
 - 启动或重连时补拉 `/api/pending`
 - 对事件去重、限速
 - 通过 OpenClaw Gateway RPC `send` 直接通知到你配置的 channel
-- 默认写日志到 `~/.openclaw/workspace/memory/htmlhub-watch.log`，避免后台 stdout 干扰 OpenClaw
+- 默认写日志到 `~/.openclaw/workspace/memory/pagegate-watch.log`，避免后台 stdout 干扰 OpenClaw
 
 你可以用下面脚本测试 `chat.send` 是否正常：
 
@@ -517,29 +525,29 @@ export OPENCLAW_SESSION_KEY="你的目标 sessionKey"
 
 ### CLI 客户端
 
-Skill 自带一个零依赖的命令行客户端 `scripts/htmlhub_client.py`，覆盖所有管理操作：
+Skill 自带一个零依赖的命令行客户端 `scripts/pagegate_client.py`，覆盖所有管理操作：
 
 ```bash
 # 发布页面
-python3 scripts/htmlhub_client.py publish --file page.html --slug my-page --title "我的页面" --access public
+python3 scripts/pagegate_client.py publish --file page.html --slug my-page --title "我的页面" --access public
 
 # 查看待审批
-python3 scripts/htmlhub_client.py pending
+python3 scripts/pagegate_client.py pending
 
 # 通过访客
-python3 scripts/htmlhub_client.py approve --slug xian-trip --visitor-id dingtalk_oABC123
+python3 scripts/pagegate_client.py approve --slug xian-trip --visitor-id dingtalk_oABC123
 
 # 拒绝访客
-python3 scripts/htmlhub_client.py reject --slug xian-trip --visitor-id dingtalk_oABC123
+python3 scripts/pagegate_client.py reject --slug xian-trip --visitor-id dingtalk_oABC123
 
 # 更新页面元数据
-python3 scripts/htmlhub_client.py update --slug my-page --title "新标题" --access approval
+python3 scripts/pagegate_client.py update --slug my-page --title "新标题" --access approval
 
 # 删除页面
-python3 scripts/htmlhub_client.py delete --slug my-page
+python3 scripts/pagegate_client.py delete --slug my-page
 
 # 撤销访客权限
-python3 scripts/htmlhub_client.py revoke --slug my-page --visitor-id dingtalk_oABC123
+python3 scripts/pagegate_client.py revoke --slug my-page --visitor-id dingtalk_oABC123
 ```
 
 ---
@@ -553,7 +561,7 @@ python3 scripts/htmlhub_client.py revoke --slug my-page --visitor-id dingtalk_oA
 ## 目录结构
 
 ```
-htmlhub/
+pagegate/
 ├── server.py              # 后端服务（FastAPI）
 ├── config.yaml            # 配置文件
 ├── requirements.txt       # Python 依赖
@@ -562,8 +570,8 @@ htmlhub/
 ├── openclaw-skill/        # OpenClaw 审批技能
 │   ├── SKILL.md           # 技能定义（对话式审批）
 │   └── scripts/
-│       ├── htmlhub_client.py  # CLI 客户端（发布/审批/管理）
-│       └── htmlhub_watch.py   # SSE Watcher（实时拉取审批事件）
+│       ├── pagegate_client.py  # CLI 客户端（发布/审批/管理）
+│       └── pagegate_watch.py   # SSE Watcher（实时拉取审批事件）
 ├── templates/             # Jinja2 模板
 │   ├── index.html         # 公开目录页
 │   ├── dashboard.html     # 管理后台

@@ -19,27 +19,27 @@ def env(name: str, required: bool = True) -> str:
     if required and not value:
         print(f"Missing required environment variable: {name}", file=sys.stderr)
         sys.exit(2)
-    return value.rstrip("/") if name in ("HTMLHUB_URL", "OPENCLAW_GATEWAY_URL") else value
+    return value.rstrip("/") if name in ("PAGEGATE_URL", "OPENCLAW_GATEWAY_URL") else value
 
 
-base_url = env("HTMLHUB_URL")
-admin_token = env("HTMLHUB_ADMIN_TOKEN")
+base_url = env("PAGEGATE_URL")
+admin_token = env("PAGEGATE_ADMIN_TOKEN")
 notify_channel = env("OPENCLAW_NOTIFY_CHANNEL")
 notify_target = env("OPENCLAW_NOTIFY_TARGET")
 notify_account = env("OPENCLAW_NOTIFY_ACCOUNT")
 gateway_url = env("OPENCLAW_GATEWAY_URL", required=False)
 gateway_token = env("OPENCLAW_GATEWAY_TOKEN", required=False)
 state_file = os.environ.get(
-    "HTMLHUB_WATCH_STATE_FILE",
-    os.path.expanduser("~/.openclaw/workspace/memory/htmlhub-watch-state.json"),
+    "PAGEGATE_WATCH_STATE_FILE",
+    os.path.expanduser("~/.openclaw/workspace/memory/pagegate-watch-state.json"),
 )
-send_delay_ms = int(os.environ.get("HTMLHUB_WATCH_SEND_DELAY_MS", "1200"))
-reconnect_delay_ms = int(os.environ.get("HTMLHUB_WATCH_RECONNECT_MS", "2000"))
-sync_pending_on_start = os.environ.get("HTMLHUB_WATCH_SYNC_PENDING", "1") == "1"
-verbose = os.environ.get("HTMLHUB_WATCH_VERBOSE", "0") == "1"
+send_delay_ms = int(os.environ.get("PAGEGATE_WATCH_SEND_DELAY_MS", "1200"))
+reconnect_delay_ms = int(os.environ.get("PAGEGATE_WATCH_RECONNECT_MS", "2000"))
+sync_pending_on_start = os.environ.get("PAGEGATE_WATCH_SYNC_PENDING", "1") == "1"
+verbose = os.environ.get("PAGEGATE_WATCH_VERBOSE", "0") == "1"
 log_file = os.environ.get(
-    "HTMLHUB_WATCH_LOG_FILE",
-    os.path.expanduser("~/.openclaw/workspace/memory/htmlhub-watch.log"),
+    "PAGEGATE_WATCH_LOG_FILE",
+    os.path.expanduser("~/.openclaw/workspace/memory/pagegate-watch.log"),
 )
 
 
@@ -98,7 +98,7 @@ def build_message(event):
     page = event.get("page", {})
     visitor = event.get("visitor", {})
     return (
-        f"[htmlhub-event]\n"
+        f"[pagegate-event]\n"
         f"有人想查看你的页面\n"
         f"页面：{page.get('title', '')} ({page.get('slug', '')})\n"
         f"访客：{visitor.get('name', '')}（{visitor.get('provider_name', visitor.get('provider', ''))}登录）\n"
@@ -109,8 +109,8 @@ def build_message(event):
 
 
 def make_idempotency_key(event_id):
-    safe = re.sub(r"[^a-zA-Z0-9._:-]+", "-", event_id or "htmlhub")
-    return ("htmlhub-send-" + safe)[:120]
+    safe = re.sub(r"[^a-zA-Z0-9._:-]+", "-", event_id or "pagegate")
+    return ("pagegate-send-" + safe)[:120]
 
 
 def send_notification(event):
@@ -145,12 +145,12 @@ def deliver_event(state, event):
     if not event_id:
         return
     if not remember_sent(state, event_id):
-        log(f"[htmlhub-watch] skip duplicate {event_id}")
+        log(f"[pagegate-watch] skip duplicate {event_id}")
         return
     out = send_notification(event)
-    log(f"[htmlhub-watch] delivered {event_id}")
+    log(f"[pagegate-watch] delivered {event_id}")
     if out:
-        log(f"[htmlhub-watch] send result {out}")
+        log(f"[pagegate-watch] send result {out}")
     time.sleep(send_delay_ms / 1000.0)
 
 
@@ -167,12 +167,12 @@ def sync_pending(state):
     try:
         data = fetch_pending()
         if data.get("count", 0) == 0:
-            log("[htmlhub-watch] no pending requests")
+            log("[pagegate-watch] no pending requests")
             return
         for item in data.get("pending", []):
             deliver_event(state, build_pending_event(item))
     except Exception as e:
-        log(f"[htmlhub-watch] sync_pending failed: {e}")
+        log(f"[pagegate-watch] sync_pending failed: {e}")
 
 
 def stream_events():
@@ -216,7 +216,7 @@ def stream_events():
         except KeyboardInterrupt:
             break
         except Exception as e:
-            log(f"[htmlhub-watch] reconnect after error: {e}")
+            log(f"[pagegate-watch] reconnect after error: {e}")
         time.sleep(reconnect_delay_ms / 1000.0)
 
 
@@ -224,6 +224,6 @@ if __name__ == "__main__":
     try:
         stream_events()
     except Exception as e:
-        log(f"[htmlhub-watch] FATAL: {e}")
+        log(f"[pagegate-watch] FATAL: {e}")
         import sys
         sys.exit(1)

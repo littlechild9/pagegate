@@ -1,5 +1,5 @@
 #!/bin/bash
-# HTMLHub Watcher 启动脚本（带自动重启）
+# PageGate Watcher 启动脚本（带自动重启）
 # 使用方法: ./start-watcher.sh
 #
 # 会自动：
@@ -12,8 +12,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV_PYTHON="$SCRIPT_DIR/venv/bin/python"
-WATCH_SCRIPT="$SCRIPT_DIR/openclaw-skill/scripts/htmlhub_watch.py"
-LOG_FILE="${HTMLHUB_WATCH_LOG_FILE:-$HOME/.openclaw/workspace/memory/htmlhub-watch-real.log}"
+WATCH_SCRIPT="$SCRIPT_DIR/openclaw-skill/scripts/pagegate_watch.py"
+LOG_FILE="${PAGEGATE_WATCH_LOG_FILE:-$HOME/.openclaw/workspace/memory/pagegate-watch.log}"
 
 # 加载 .env（如果存在）
 ENV_FILE="$SCRIPT_DIR/.env"
@@ -26,7 +26,7 @@ fi
 
 # 杀掉已有 watcher
 echo "Stopping existing watcher..."
-pkill -f "htmlhub_watch.py" 2>/dev/null || true
+pkill -f "pagegate_watch.py" 2>/dev/null || true
 sleep 1
 
 # 创建日志目录
@@ -39,11 +39,11 @@ exec >> "$LOG_FILE" 2>&1
 RESTART_DELAY=1
 MAX_DELAY=5
 while true; do
-    echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [htmlhub-watch] === watcher started ==="
+    echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [pagegate-watch] === watcher started ==="
     # 不用 exec，直接运行 Python；Python 崩溃/退出后循环继续
     "$VENV_PYTHON" "$WATCH_SCRIPT"
     EXIT_CODE=$?
-    echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [htmlhub-watch] watcher exited (code=$EXIT_CODE), restarting in ${RESTART_DELAY}s..."
+    echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [pagegate-watch] watcher exited (code=$EXIT_CODE), restarting in ${RESTART_DELAY}s..."
     sleep "$RESTART_DELAY"
     RESTART_DELAY=$((RESTART_DELAY * 2))
     [ "$RESTART_DELAY" -gt "$MAX_DELAY" ] && RESTART_DELAY="$MAX_DELAY"

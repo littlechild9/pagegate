@@ -6,9 +6,9 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-HOST = os.environ.get("MOCK_HTMLHUB_HOST", "127.0.0.1")
-PORT = int(os.environ.get("MOCK_HTMLHUB_PORT", "18888"))
-ADMIN_TOKEN = os.environ.get("MOCK_HTMLHUB_TOKEN", "mock-admin-token")
+HOST = os.environ.get("MOCK_PAGEGATE_HOST", "127.0.0.1")
+PORT = int(os.environ.get("MOCK_PAGEGATE_PORT", "18888"))
+ADMIN_TOKEN = os.environ.get("MOCK_PAGEGATE_TOKEN", "mock-admin-token")
 
 PENDING = [
     {
@@ -117,5 +117,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"Mock HTML Hub server listening on http://{HOST}:{PORT}")
+    print(f"Mock PageGate server listening on http://{HOST}:{PORT}")
     server.serve_forever()

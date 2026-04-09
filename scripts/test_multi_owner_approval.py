@@ -52,7 +52,7 @@ class ScenarioResult:
 
 class SandboxServer:
     def __init__(self) -> None:
-        self.tempdir_obj = tempfile.TemporaryDirectory(prefix="htmlhub-approval-")
+        self.tempdir_obj = tempfile.TemporaryDirectory(prefix="pagegate-approval-")
         self.root = Path(self.tempdir_obj.name)
         self.port = _pick_free_port()
         self.base_url = f"http://127.0.0.1:{self.port}"
@@ -243,7 +243,7 @@ class SandboxServer:
         cookie = signer.sign(visitor_id).decode()
         return self.client.get(
             f"/{slug}",
-            cookies={"htmlhub_session": cookie},
+            cookies={"pagegate_session": cookie},
         )
 
     def create_page_without_owner(self, slug: str, *, access: str = "approval") -> None:

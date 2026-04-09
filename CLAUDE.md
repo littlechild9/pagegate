@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-HTML Hub is a self-hosted Python server for publishing and sharing AI-generated HTML pages. It supports public access, approval-based access (via DingTalk/WeChat OAuth login), and an admin dashboard. Written in Chinese for a Chinese-speaking user base.
+PageGate is a self-hosted Python server for publishing and sharing AI-generated HTML pages. It supports public access, approval-based access (via DingTalk/WeChat OAuth login), and an admin dashboard. Written in Chinese for a Chinese-speaking user base.
 
 ## Running the Server
 
@@ -37,8 +37,8 @@ Configuration lives in `config.yaml` (copy from `config.example.yaml`). Key sett
 **Templates**: Jinja2 templates in `templates/` — `index.html` (public listing), `dashboard.html` (admin), `login.html` (OAuth prompt), `pending.html` (waiting for approval).
 
 **OpenClaw integration** (`openclaw-skill/`): A companion skill for the OpenClaw chat platform that enables conversational approval. Includes:
-- `scripts/htmlhub_client.py` — zero-dependency CLI client covering all management APIs
-- `scripts/htmlhub_watch.py` — SSE watcher that connects to the event stream and forwards notifications
+- `scripts/pagegate_client.py` — zero-dependency CLI client covering all management APIs
+- `scripts/pagegate_watch.py` — SSE watcher that connects to the event stream and forwards notifications
 
 ## Key Route Ordering
 

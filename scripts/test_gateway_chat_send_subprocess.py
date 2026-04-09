@@ -18,7 +18,7 @@ def env(name: str, required: bool = True) -> str:
 
 def make_idempotency_key(seed: str) -> str:
     safe = re.sub(r"[^a-zA-Z0-9._:-]+", "-", seed)
-    return ("htmlhub-test-" + safe)[:120]
+    return ("pagegate-test-" + safe)[:120]
 
 
 parser = argparse.ArgumentParser(description="Reproduce watcher-style gateway chat.send call")

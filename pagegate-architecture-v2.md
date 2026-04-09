@@ -1,4 +1,4 @@
-# HTML Hub — 架构设计文档 v2
+# PageGate — 架构设计文档 v2
 
 > 一个简单的Python服务器，用于发布、管理和分享AI生成的HTML页面。
 
@@ -83,7 +83,7 @@ curl -X POST http://your-server:8000/api/reindex \
 
 ```
 ┌──────────────────────────────────────────────┐
-│  📂 HTML Hub                                 │
+│  📂 PageGate                                 │
 │                                              │
 │  📄 杭州周末          2026-03-15              │
 │  📄 AI周报 #12       2026-04-05              │
@@ -96,7 +96,7 @@ curl -X POST http://your-server:8000/api/reindex \
 
 ```
 ┌──────────────────────────────────────────────┐
-│  📂 HTML Hub — Dashboard           [发布新页面] │
+│  📂 PageGate — Dashboard           [发布新页面] │
 │                                              │
 │  🔍 搜索...                                  │
 │                                              │

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# HTML Hub local deployment wrapper.
+# PageGate local deployment wrapper.
 # - Generates or reuses a local super-admin token.
 # - Writes local deployment credentials under .deploy-secrets/.
 # - Renders a deployment config.yaml for the target domain.
 # - Syncs the repository to the remote host and runs remote deploy.sh.
 #
 # Usage:
-#   bash scripts/run_server.sh user@your-server your-domain.com [/opt/htmlhub]
+#   bash scripts/run_server.sh user@your-server your-domain.com [/opt/pagegate]
 #   bash scripts/run_server.sh --dry-run user@your-server your-domain.com
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,10 +22,10 @@ fi
 
 REMOTE="${1:-}"
 DOMAIN="${2:-}"
-REMOTE_APP_DIR="${3:-/opt/htmlhub}"
+REMOTE_APP_DIR="${3:-/opt/pagegate}"
 
 if [[ -z "$REMOTE" || -z "$DOMAIN" ]]; then
-  echo "用法: bash scripts/run_server.sh [--dry-run] user@your-server your-domain.com [/opt/htmlhub]" >&2
+  echo "用法: bash scripts/run_server.sh [--dry-run] user@your-server your-domain.com [/opt/pagegate]" >&2
   exit 2
 fi
 
@@ -134,7 +134,7 @@ write_secrets_file
 render_config
 
 echo "============================================"
-echo "  HTML Hub 部署准备"
+echo "  PageGate 部署准备"
 echo "============================================"
 echo "  远端:        $REMOTE"
 echo "  域名:        $DOMAIN"

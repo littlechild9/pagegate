@@ -1,4 +1,4 @@
-# HTML Hub example configuration
+# PageGate example configuration
 # Copy this file to config.yaml and fill in your own values.
 
 admin_token: "replace-with-your-admin-token"
