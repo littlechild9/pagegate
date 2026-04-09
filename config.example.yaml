@@ -10,7 +10,7 @@ registration:
 server:
   host: "0.0.0.0"
   port: 8888
-  base_url: "http://xuanzhang.net:8888"
+  base_url: "http://115.190.148.77:8888"
   session_secret: "replace-with-your-session-secret"
 
 dingtalk:

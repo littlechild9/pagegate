@@ -31,7 +31,7 @@ WATCH_SCRIPT = SCRIPT_DIR / "pagegate_watch.py"
 START_WATCHER = SCRIPT_DIR / "start-watcher.sh"
 
 # ── 默认值 ─────────────────────────────────────────────────────────
-DEFAULT_SERVER_URL = "http://xuanzhang.net:8888"
+DEFAULT_SERVER_URL = "http://115.190.148.77:8888"
 DEFAULT_CHANNEL = "openclaw-weixin"
 DEFAULT_LOG_FILE = "~/.openclaw/workspace/memory/pagegate-watch.log"
 DEFAULT_STATE_FILE = "/tmp/pagegate-watch-state.json"

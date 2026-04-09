@@ -1,6 +1,6 @@
 ---
 name: pagegate-client
-description: Manage a deployed PageGate from OpenClaw chat. Use when publishing local HTML files to PageGate, listing pages, updating page metadata or access mode, checking pending visitors, approving or rejecting access requests, or bridging real-time PageGate approval events into an active OpenClaw session. Requires PAGEGATE_URL, PAGEGATE_ADMIN_TOKEN, and OPENCLAW_SESSION_KEY for the realtime bridge.
+description: Manage a deployed PageGate from OpenClaw chat. Use when publishing local HTML files to PageGate, listing pages, updating page metadata or access mode, checking pending visitors, approving or rejecting access requests, or bridging real-time PageGate approval events into an active OpenClaw session. Requires PAGEGATE_URL, PAGEGATE_ADMIN_TOKEN, OPENCLAW_NOTIFY_CHANNEL, OPENCLAW_NOTIFY_TARGET, and OPENCLAW_NOTIFY_ACCOUNT for the realtime bridge.
 ---
 
 # PageGate Client
@@ -17,7 +17,7 @@ python3 scripts/setup.py
 
 向导会引导你完成以下步骤：
 
-1. **选择服务器** — 使用默认公共服务器（xuanzhang.net:8888）或连接自建服务器
+1. **选择服务器** — 使用默认公共服务器（115.190.148.77:8888）或连接自建服务器
 2. **配置 Admin Token** — 输入服务器管理令牌
 3. **验证连通性** — 自动测试服务器是否可达
 4. **配置微信通道** — 设置 OpenClaw 通知通道（channel、target、account）
