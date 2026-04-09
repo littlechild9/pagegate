@@ -105,15 +105,14 @@ Preferred launcher:
 
 The watcher must keep stdout/stderr away from OpenClaw exec channels. Diagnostics belong in the log file only.
 
-Recommended after the first successful start:
-
-```bash
-python3 scripts/register_watch_cron.py
-```
+If watcher keepalive is needed after onboarding:
+- Keep the decision in chat. The main agent should decide whether to enable it.
+- Do not present cron registration as a mandatory local terminal step to the user.
+- When the main agent chooses to enable it, it may call `python3 scripts/register_watch_cron.py`.
 
 The keepalive helpers:
 - `scripts/check-watcher.sh` checks the health file, pid, and status, then restarts the watcher when needed
-- `scripts/register_watch_cron.py` creates or updates an OpenClaw cron job that runs `check-watcher.sh` every minute
+- `scripts/register_watch_cron.py` creates or updates an OpenClaw cron job whose message tells the OpenClaw main agent to run `check-watcher.sh`
 
 ## Publish a local page
 
@@ -270,5 +269,5 @@ python3 scripts/pagegate_client.py revoke --slug my-page --visitor-id some_visit
 - `scripts/pagegate_client.py` — API helper for publish/update/pending/approval tasks
 - `scripts/start-watcher.sh` — safe watcher launcher
 - `scripts/check-watcher.sh` — keepalive health checker
-- `scripts/register_watch_cron.py` — OpenClaw cron registration helper
+- `scripts/register_watch_cron.py` — helper the main agent can use to register keepalive cron when needed
 - `scripts/pagegate_watch.py` — SSE watcher bridge

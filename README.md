@@ -65,7 +65,7 @@ curl -fsSL https://raw.githubusercontent.com/littlechild9/pagegate/main/openclaw
 安装完成后，继续在 OpenClaw 聊天里完成 onboarding。
 ```
 
-后续的托管服务器 / 自部署服务器选择、给你的 PageGate 起名字、PageGate API token 保存、通知路由、watcher 启动和 keepalive cron 注册，都在 onboard 流程里完成。托管模式会默认使用 `http://115.190.148.77:8888`。
+后续的托管服务器 / 自部署服务器选择、给你的 PageGate 起名字、PageGate API token 保存、通知路由和 watcher 启动，都在聊天里的 onboard 流程里完成。托管模式会默认使用 `http://115.190.148.77:8888`。如果后续需要 keepalive cron，由 OpenClaw 主 agent 在聊天流里按提示处理，不作为本地安装脚本的默认步骤。
 
 完成注册后，每个用户都会拿到一个自己的个人 PageGate 入口，例如 `https://your-domain.com/<username>`。后续发布的页面会挂在这个入口下面，canonical URL 形如 `https://your-domain.com/<username>/<slug>/`。
 
@@ -86,7 +86,7 @@ README 里只保留一种推荐集成方式：`SSE watcher`。
 - `openclaw-skill/scripts/setup.py`：交互式本地向导，仅在需要手工排障时使用
 - `openclaw-skill/scripts/start-watcher.sh`：启动并守护 watcher
 - `openclaw-skill/scripts/check-watcher.sh`：检查 watcher 健康并在必要时重启
-- `openclaw-skill/scripts/register_watch_cron.py`：向 OpenClaw 注册 keepalive cron job
+- `openclaw-skill/scripts/register_watch_cron.py`：供 OpenClaw 主 agent 注册 keepalive cron 的 helper
 - `openclaw-skill/scripts/pagegate_watch.py`：同步 `/api/pending`，订阅 `/api/events/stream`
 - `openclaw-skill/scripts/pagegate_client.py`：发布、审批、更新、删除页面
 
@@ -96,8 +96,7 @@ README 里只保留一种推荐集成方式：`SSE watcher`。
 cd ~/.openclaw/workspace/skills/pagegate-client
 ./scripts/start-watcher.sh
 
-# 推荐再注册一个 OpenClaw keepalive cron
-python3 scripts/register_watch_cron.py
+# 如果后续要加 keepalive cron，让 OpenClaw 主 agent 在聊天里处理
 ```
 
 ## 第二部分：自托管服务器
