@@ -1,0 +1,26 @@
+# HTML Hub example configuration
+# Copy this file to config.yaml and fill in your own values.
+
+admin_token: "replace-with-your-admin-token"
+
+# User registration: "open" allows anyone to register, "closed" disables registration
+registration:
+  mode: "open"
+
+server:
+  host: "0.0.0.0"
+  port: 8888
+  base_url: "http://xuanzhang.net:8888"
+  session_secret: "replace-with-your-session-secret"
+
+dingtalk:
+  app_key: ""
+  app_secret: ""
+
+wechat:
+  app_id: ""
+  app_secret: ""
+
+openclaw:
+  webhook_url: ""
+  webhook_token: ""

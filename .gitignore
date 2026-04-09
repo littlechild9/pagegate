@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+.pid
+
+# 运行时数据（按需取消注释以纳入版本管理）
+data/
+pages/
+
+# 系统文件
+.DS_Store
+*.swp
+*.swo
+
+# IDE
+.idea/
+.vscode/
+.claude/
+.deploy-secrets/
+
+# Local config (contains tokens/secrets)
+config.yaml
+
+# Local env (contains tokens)
+.env

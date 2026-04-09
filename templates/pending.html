@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>等待审批 — {{ page.title }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: #fafafa;
+            color: #1a1a1a;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card {
+            background: #fff;
+            border: 1px solid #e8e8e8;
+            border-radius: 16px;
+            padding: 48px 40px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid #f0f0f0;
+            border-top-color: #1a1a1a;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 24px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .card h1 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .card p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        .visitor-info {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #f5f5f5;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin: 16px 0;
+        }
+        .visitor-info img {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+        }
+        .status {
+            font-size: 13px;
+            color: #999;
+            margin-top: 24px;
+        }
+        .status.approved {
+            color: #07c160;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="spinner" id="spinner"></div>
+        <h1>{{ page.title }}</h1>
+        <p>你已通过钉钉登录，访问申请已自动提交</p>
+        <p style="color:#999;font-size:13px;">审批通过后页面会自动刷新，无需手动操作</p>
+
+        <div class="visitor-info">
+            {% if visitor.avatar %}
+            <img src="{{ visitor.avatar }}" alt="">
+            {% endif %}
+            <span>{{ visitor.name }}</span>
+        </div>
+
+        <div class="status" id="status">等待作者审批中...</div>
+    </div>
+
+    <script>
+        const slug = "{{ slug }}";
+        const statusEl = document.getElementById("status");
+        const spinnerEl = document.getElementById("spinner");
+        let approved = false;
+        const startMs = Date.now();
+
+        function elapsed() {
+            return Date.now() - startMs;
+        }
+
+        // Simple timer display
+        function renderTimer(text, color) {
+            const el = document.createElement("div");
+            el.style.cssText = "position:fixed;top:16px;right:16px;background:" + color + ";color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.15)";
+            el.textContent = text;
+            document.body.appendChild(el);
+            return el;
+        }
+
+        const timerEl = renderTimer("等待中 0s", "#555");
+
+        function updateTimer() {
+            if (!approved) {
+                timerEl.textContent = "等待中 " + (elapsed() / 1000).toFixed(1) + "s";
+            }
+        }
+        let updateTimerId = setInterval(updateTimer, 500);
+
+        function markApproved(latencyMs) {
+            if (approved) return;
+            approved = true;
+            const totalMs = elapsed();
+            clearInterval(updateTimerId);
+            timerEl.textContent = "⚡ 总耗时 " + totalMs + "ms";
+            timerEl.style.background = "#2e7d32";
+            timerEl.style.fontSize = "18px";
+            timerEl.style.padding = "12px 24px";
+            statusEl.textContent = "已通过！页面将保持在此";
+            statusEl.className = "status approved";
+            spinnerEl.style.display = "none";
+            if (fallbackTimer) clearInterval(fallbackTimer);
+        }
+
+        async function checkApproval() {
+            try {
+                const resp = await fetch(`/api/check-approval/${slug}`);
+                const data = await resp.json();
+                if (data.status === "approved") {
+                    markApproved(null);
+                }
+            } catch (e) {}
+        }
+
+        let fallbackTimer = null;
+
+        function startFallbackPolling() {
+            if (fallbackTimer) return;
+            fallbackTimer = setInterval(checkApproval, 2000);
+        }
+
+        let esReconnectDelay = 1000;
+        function connectSSE() {
+            if (!window.EventSource) { startFallbackPolling(); return; }
+            const source = new EventSource(`/api/check-approval/stream/${slug}`);
+            source.addEventListener("status", (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.status === "approved") {
+                        source.close();
+                        const latencyMs = data.published_at ? Math.round(elapsed() - data.published_at * 1000) : null;
+                        markApproved(latencyMs);
+                    }
+                } catch (e) {}
+            });
+            source.onopen = () => {
+                esReconnectDelay = 1000;
+            };
+            source.onerror = () => {
+                try { source.close(); } catch (e) {}
+                if (!approved) {
+                    setTimeout(connectSSE, esReconnectDelay);
+                    esReconnectDelay = Math.min(esReconnectDelay * 2, 30000);
+                }
+            };
+        }
+        connectSSE();
+    </script>
+</body>
+</html>
