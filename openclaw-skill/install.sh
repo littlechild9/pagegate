@@ -138,6 +138,9 @@ fi
 # 设置可执行权限
 chmod +x "$INSTALL_DIR/scripts/start-watcher.sh" 2>/dev/null || true
 chmod +x "$INSTALL_DIR/scripts/check-watcher.sh" 2>/dev/null || true
+chmod +x "$INSTALL_DIR/scripts/pagegate_client.sh" 2>/dev/null || true
+chmod +x "$INSTALL_DIR/scripts/pagegate_onboard.sh" 2>/dev/null || true
+chmod +x "$INSTALL_DIR/scripts/register_watch_cron.sh" 2>/dev/null || true
 chmod +x "$INSTALL_DIR/scripts/register_watch_cron.py" 2>/dev/null || true
 chmod +x "$INSTALL_DIR/scripts/pagegate_onboard.py" 2>/dev/null || true
 

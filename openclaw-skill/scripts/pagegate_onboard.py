@@ -10,6 +10,11 @@ import time
 from pathlib import Path
 from urllib import error, request
 
+DEFAULT_RESULT_FILE = os.path.expanduser("~/.openclaw/workspace/memory/pagegate-onboard-result.json")
+_DEVNULL = open(os.devnull, "w", encoding="utf-8")
+sys.stdout = _DEVNULL
+sys.stderr = _DEVNULL
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
 ENV_FILE = SKILL_DIR / '.env'
@@ -22,10 +27,17 @@ DEFAULT_HEALTH_FILE = '~/.openclaw/workspace/memory/pagegate-watch-health.json'
 DEFAULT_PENDING_SYNC_MS = '60000'
 DEFAULT_SERVER_URL = 'http://115.190.148.77:8888'
 DEFAULT_CHANNEL = 'openclaw-weixin'
+KEEPALIVE_CRON_COMMAND = 'bash scripts/register_watch_cron.sh'
+
+
+def result_file_path() -> Path:
+    return Path(os.environ.get("PAGEGATE_ONBOARD_RESULT_FILE", DEFAULT_RESULT_FILE)).expanduser()
 
 
 def emit(payload, exit_code=0):
-    sys.stdout.write(json.dumps(payload, ensure_ascii=False) + '\n')
+    result_file = result_file_path()
+    result_file.parent.mkdir(parents=True, exist_ok=True)
+    result_file.write_text(json.dumps(payload, ensure_ascii=False), encoding='utf-8')
     raise SystemExit(exit_code)
 
 
@@ -289,6 +301,13 @@ def send_test_message(channel, target, account, gateway_url=''):
         return False, str(e)
 
 
+def build_keepalive_cron_prompt():
+    return (
+        "如果你判断这个 watcher 需要 keepalive cron，请由 OpenClaw 主 agent 在聊天流里决定是否启用，"
+        f"然后再运行 `{KEEPALIVE_CRON_COMMAND}`。不要把 cron 注册当成安装脚本或本地向导的默认步骤。"
+    )
+
+
 parser = JsonArgumentParser(description='Non-interactive PageGate onboarding helper')
 parser.add_argument('--url', default=DEFAULT_SERVER_URL)
 parser.add_argument('--auth-mode', required=True, choices=['quick-register', 'register', 'login', 'token'])
@@ -306,93 +325,110 @@ parser.add_argument('--health-file', default=DEFAULT_HEALTH_FILE)
 parser.add_argument('--pending-sync-ms', default=DEFAULT_PENDING_SYNC_MS)
 parser.add_argument('--start-watcher', action='store_true')
 parser.add_argument('--send-test', action='store_true')
-args = parser.parse_args()
 
-if args.auth_mode == 'quick-register' and not args.pagegate_name:
-    fail('--pagegate-name is required for auth-mode=quick-register', exit_code=2)
-if args.auth_mode in ('register', 'login'):
-    if not args.email:
-        fail('--email is required for register/login', exit_code=2)
-    if not args.password:
-        fail('--password is required for register/login', exit_code=2)
-if args.auth_mode == 'token' and not args.api_token:
-    fail('--api-token is required for auth-mode=token', exit_code=2)
 
-url = args.url.rstrip('/')
-auth = resolve_auth(args, url)
-token = auth['token']
-resolved_auth_mode = auth['authMode']
-verified, verify_detail = verify_connection(url, token)
-if not verified:
-    fail('Failed to verify PageGate connection', url=url, authMode=resolved_auth_mode, verify=verify_detail)
+def main():
+    args = parser.parse_args()
 
-account = fetch_account_profile(url, token)
-resolved_username = account.get('username') or auth.get('username', '') or args.username or ''
-resolved_pagegate_name = account.get('pagegate_name') or auth.get('pagegateName', '') or args.pagegate_name or ''
-resolved_pagegate_url = account.get('pagegate_url') or auth.get('pagegateUrl', '')
-if not resolved_pagegate_url and resolved_username:
-    resolved_pagegate_url = f"{url}/{resolved_username}"
-resolved_dashboard_url = account.get('dashboard_url') or auth.get('dashboardUrl', '') or f'{url}/dashboard?token={token}'
+    if args.auth_mode == 'quick-register' and not args.pagegate_name:
+        fail('--pagegate-name is required for auth-mode=quick-register', exit_code=2)
+    if args.auth_mode in ('register', 'login'):
+        if not args.email:
+            fail('--email is required for register/login', exit_code=2)
+        if not args.password:
+            fail('--password is required for register/login', exit_code=2)
+    if args.auth_mode == 'token' and not args.api_token:
+        fail('--api-token is required for auth-mode=token', exit_code=2)
 
-backup = write_env(
-    url,
-    token,
-    args.notify_channel,
-    args.notify_target,
-    args.notify_account,
-    args.log_file,
-    args.state_file,
-    args.health_file,
-    args.pending_sync_ms,
-    pagegate_name=resolved_pagegate_name,
-    pagegate_username=resolved_username,
-    pagegate_home_url=resolved_pagegate_url,
-    pagegate_dashboard_url=resolved_dashboard_url,
-)
-if ONBOARDING_MARKER.exists():
-    ONBOARDING_MARKER.unlink()
+    url = args.url.rstrip('/')
+    auth = resolve_auth(args, url)
+    token = auth['token']
+    resolved_auth_mode = auth['authMode']
+    verified, verify_detail = verify_connection(url, token)
+    if not verified:
+        fail('Failed to verify PageGate connection', url=url, authMode=resolved_auth_mode, verify=verify_detail)
 
-watcher_started = False
-if args.start_watcher:
-    watcher_started = start_watcher()
+    account = fetch_account_profile(url, token)
+    resolved_username = account.get('username') or auth.get('username', '') or args.username or ''
+    resolved_pagegate_name = account.get('pagegate_name') or auth.get('pagegateName', '') or args.pagegate_name or ''
+    resolved_pagegate_url = account.get('pagegate_url') or auth.get('pagegateUrl', '')
+    if not resolved_pagegate_url and resolved_username:
+        resolved_pagegate_url = f"{url}/{resolved_username}"
+    resolved_dashboard_url = account.get('dashboard_url') or auth.get('dashboardUrl', '') or f'{url}/dashboard?token={token}'
 
-config = discover_openclaw_config()
-test_sent = False
-test_detail = ''
-if args.send_test:
-    test_sent, test_detail = send_test_message(
+    backup = write_env(
+        url,
+        token,
         args.notify_channel,
         args.notify_target,
         args.notify_account,
-        config.get('gateway_url', ''),
+        args.log_file,
+        args.state_file,
+        args.health_file,
+        args.pending_sync_ms,
+        pagegate_name=resolved_pagegate_name,
+        pagegate_username=resolved_username,
+        pagegate_home_url=resolved_pagegate_url,
+        pagegate_dashboard_url=resolved_dashboard_url,
     )
+    if ONBOARDING_MARKER.exists():
+        ONBOARDING_MARKER.unlink()
 
-emit({
-    'ok': True,
-    'url': url,
-    'authMode': resolved_auth_mode,
-    'apiToken': token,
-    'envFile': str(ENV_FILE),
-    'envBackupFile': backup,
-    'onboardingMarkerCleared': not ONBOARDING_MARKER.exists(),
-    'notifyChannel': args.notify_channel,
-    'notifyTarget': args.notify_target,
-    'notifyAccount': args.notify_account,
-    'verify': verify_detail,
-    'watcherStarted': watcher_started,
-    'testSent': test_sent,
-    'testDetail': test_detail,
-    'discovered': config,
-    'pagegateName': resolved_pagegate_name,
-    'username': resolved_username,
-    'pagegateUrl': resolved_pagegate_url,
-    'dashboardUrl': resolved_dashboard_url,
-    'nextSteps': [
-        '发布一个 access=approval 或 access=private 的测试页面。',
-        '用你自己的访客身份打开页面链接并完成一次登录访问。',
-        '访问完成后运行 python3 scripts/pagegate_client.py visitors，确认自己的 visitor_id。',
-        '确认 visitor_id 后运行 python3 scripts/pagegate_client.py whitelist-add --visitor-id <your-visitor-id>，把自己加入当前账号的用户级白名单。',
-        '以后想查看全部页面和审批状态，请直接打开 dashboardUrl；个人首页 pagegateUrl 的公开页面 tab 只展示 public 页面，已获准访问的内容会出现在登录后的已授权给我 tab。',
-    ],
-    'selfWhitelistCommandTemplate': 'python3 scripts/pagegate_client.py whitelist-add --visitor-id <your-visitor-id>',
-})
+    watcher_started = False
+    if args.start_watcher:
+        watcher_started = start_watcher()
+
+    config = discover_openclaw_config()
+    test_sent = False
+    test_detail = ''
+    if args.send_test:
+        test_sent, test_detail = send_test_message(
+            args.notify_channel,
+            args.notify_target,
+            args.notify_account,
+            config.get('gateway_url', ''),
+        )
+
+    emit({
+        'ok': True,
+        'url': url,
+        'authMode': resolved_auth_mode,
+        'apiToken': token,
+        'envFile': str(ENV_FILE),
+        'envBackupFile': backup,
+        'onboardingMarkerCleared': not ONBOARDING_MARKER.exists(),
+        'notifyChannel': args.notify_channel,
+        'notifyTarget': args.notify_target,
+        'notifyAccount': args.notify_account,
+        'verify': verify_detail,
+        'watcherStarted': watcher_started,
+        'testSent': test_sent,
+        'testDetail': test_detail,
+        'discovered': config,
+        'pagegateName': resolved_pagegate_name,
+        'username': resolved_username,
+        'pagegateUrl': resolved_pagegate_url,
+        'dashboardUrl': resolved_dashboard_url,
+        'keepaliveCronAgentLed': True,
+        'keepaliveCronCommand': KEEPALIVE_CRON_COMMAND,
+        'keepaliveCronPrompt': build_keepalive_cron_prompt(),
+        'nextSteps': [
+            '发布一个 access=approval 或 access=private 的测试页面。',
+            '用你自己的访客身份打开页面链接并完成一次登录访问。',
+            '访问完成后运行 bash scripts/pagegate_client.sh visitors，确认自己的 visitor_id。',
+            '确认 visitor_id 后运行 bash scripts/pagegate_client.sh whitelist-add --visitor-id <your-visitor-id>，把自己加入当前账号的用户级白名单。',
+            '以后想查看全部页面和审批状态，请直接打开 dashboardUrl；个人首页 pagegateUrl 的公开页面 tab 只展示 public 页面，已获准访问的内容会出现在登录后的已授权给我 tab。',
+        ],
+        'selfWhitelistCommandTemplate': 'bash scripts/pagegate_client.sh whitelist-add --visitor-id <your-visitor-id>',
+    })
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except SystemExit:
+        raise
+    except KeyboardInterrupt:
+        fail('Cancelled by user', exit_code=130)
+    except Exception as e:
+        fail(f'Unexpected error: {e}')

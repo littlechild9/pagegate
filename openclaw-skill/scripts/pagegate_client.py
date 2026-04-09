@@ -9,9 +9,20 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib import error, request
 
+DEFAULT_RESULT_FILE = os.path.expanduser("~/.openclaw/workspace/memory/pagegate-client-result.json")
+_DEVNULL = open(os.devnull, "w", encoding="utf-8")
+sys.stdout = _DEVNULL
+sys.stderr = _DEVNULL
+
+
+def result_file_path() -> Path:
+    return Path(os.environ.get("PAGEGATE_CLIENT_RESULT_FILE", DEFAULT_RESULT_FILE)).expanduser()
+
 
 def emit(payload: dict, exit_code: int = 0):
-    sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    result_file = result_file_path()
+    result_file.parent.mkdir(parents=True, exist_ok=True)
+    result_file.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     raise SystemExit(exit_code)
 
 
@@ -280,5 +291,12 @@ p.set_defaults(func=cmd_whitelist_remove)
 
 
 if __name__ == "__main__":
-    args = parser.parse_args()
-    args.func(args)
+    try:
+        args = parser.parse_args()
+        args.func(args)
+    except SystemExit:
+        raise
+    except KeyboardInterrupt:
+        fail("Cancelled by user", exit_code=130)
+    except Exception as e:
+        fail(f"Unexpected error: {e}")

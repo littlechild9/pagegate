@@ -44,7 +44,7 @@ Ask and resolve values in this order:
    - After collecting values, call:
 
 ```bash
-python3 scripts/pagegate_onboard.py \
+bash scripts/pagegate_onboard.sh \
   --url http://115.190.148.77:8888 \
   --auth-mode quick-register|token \
   --pagegate-name "Xuan's PageGate" \
@@ -76,8 +76,8 @@ When asking for `--pagegate-name`, prefer wording like:
    - Explicitly show both the personal `PageGate URL` (`/<username>`) and the `dashboard URL`, and remind the user that both have already been saved into `.env`.
    - Explain the split clearly: `PageGate URL` is the user's personal gateway homepage. Its `公开页面` tab shows public pages; after a visitor logs in, its `已授权给我` tab can show pages that visitor has been approved for. `dashboard URL` is where the owner manages all pages plus visitor approvals and whitelist state.
    - After onboarding succeeds, proactively propose one real access test:
-     publish a small `approval` or `private` page, open it once with the user's own visitor identity, then help them run `python3 scripts/pagegate_client.py visitors`.
-   - If the user is doing self-testing, suggest adding that visitor to the current account's owner-level whitelist with `python3 scripts/pagegate_client.py whitelist-add --visitor-id <their-visitor-id>`.
+     publish a small `approval` or `private` page, open it once with the user's own visitor identity, then help them run `bash scripts/pagegate_client.sh visitors`.
+   - If the user is doing self-testing, suggest adding that visitor to the current account's owner-level whitelist with `bash scripts/pagegate_client.sh whitelist-add --visitor-id <their-visitor-id>`.
    - If route info or auth is still missing, ask for the next missing item instead of dumping raw script output.
 
 ## Runtime environment
@@ -108,10 +108,11 @@ The watcher must keep stdout/stderr away from OpenClaw exec channels. Diagnostic
 If watcher keepalive is needed after onboarding:
 - Keep the decision in chat. The main agent should decide whether to enable it.
 - Do not present cron registration as a mandatory local terminal step to the user.
-- When the main agent chooses to enable it, it may call `python3 scripts/register_watch_cron.py`.
+- When the main agent chooses to enable it, it may call `bash scripts/register_watch_cron.sh`.
 
 The keepalive helpers:
 - `scripts/check-watcher.sh` checks the health file, pid, and status, then restarts the watcher when needed
+- `scripts/register_watch_cron.sh` invokes the silent Python helper and returns the structured result
 - `scripts/register_watch_cron.py` creates or updates an OpenClaw cron job whose message tells the OpenClaw main agent to run `check-watcher.sh`
 
 ## Publish a local page
@@ -123,7 +124,7 @@ When the user wants to publish a local HTML file:
 3. Call:
 
 ```bash
-python3 scripts/pagegate_client.py publish \
+bash scripts/pagegate_client.sh publish \
   --file /absolute/path/to/page.html \
   --slug my-page \
   --title "My Page" \
@@ -146,7 +147,7 @@ Do not forward raw JSON to the user unless they ask.
 Use:
 
 ```bash
-python3 scripts/pagegate_client.py pending
+bash scripts/pagegate_client.sh pending
 ```
 
 Format pending requests as a short list with page, visitor, and visitor ID.
@@ -160,17 +161,17 @@ If a visitor is added to your whitelist, they can access all pages owned by your
 List visitors who have previously requested pages from you:
 
 ```bash
-python3 scripts/pagegate_client.py visitors
+bash scripts/pagegate_client.sh visitors
 ```
 
 ```bash
-python3 scripts/pagegate_client.py whitelist-add --visitor-id dingtalk_oABC123
+bash scripts/pagegate_client.sh whitelist-add --visitor-id dingtalk_oABC123
 ```
 
 Remove a visitor from your whitelist:
 
 ```bash
-python3 scripts/pagegate_client.py whitelist-remove --visitor-id dingtalk_oABC123
+bash scripts/pagegate_client.sh whitelist-remove --visitor-id dingtalk_oABC123
 ```
 
 When presenting visitor results in chat, show:
@@ -184,8 +185,8 @@ If `PAGEGATE_DASHBOARD_URL` exists, remind the user they can open it to verify t
 For onboarding follow-up or self-testing, recommend this sequence:
 - publish one `approval` or `private` page
 - open it once with the same person who will be whitelisted
-- run `python3 scripts/pagegate_client.py visitors`
-- then run `python3 scripts/pagegate_client.py whitelist-add --visitor-id <their-visitor-id>`
+- run `bash scripts/pagegate_client.sh visitors`
+- then run `bash scripts/pagegate_client.sh whitelist-add --visitor-id <their-visitor-id>`
 
 ## Approve or reject a visitor
 
@@ -205,13 +206,13 @@ Extract:
 Approve:
 
 ```bash
-python3 scripts/pagegate_client.py approve --slug xian-trip --visitor-id dingtalk_oABC123
+bash scripts/pagegate_client.sh approve --slug xian-trip --visitor-id dingtalk_oABC123
 ```
 
 Reject:
 
 ```bash
-python3 scripts/pagegate_client.py reject --slug xian-trip --visitor-id dingtalk_oABC123
+bash scripts/pagegate_client.sh reject --slug xian-trip --visitor-id dingtalk_oABC123
 ```
 
 Treat these as approval intents:
@@ -239,7 +240,7 @@ After an approval, rejection, whitelist add, whitelist remove, or revoke action 
 Use:
 
 ```bash
-python3 scripts/pagegate_client.py update \
+bash scripts/pagegate_client.sh update \
   --slug my-page \
   --title "New Title" \
   --access approval
@@ -254,20 +255,23 @@ These are destructive. Confirm before acting.
 Delete page:
 
 ```bash
-python3 scripts/pagegate_client.py delete --slug my-page
+bash scripts/pagegate_client.sh delete --slug my-page
 ```
 
 Revoke a visitor:
 
 ```bash
-python3 scripts/pagegate_client.py revoke --slug my-page --visitor-id some_visitor
+bash scripts/pagegate_client.sh revoke --slug my-page --visitor-id some_visitor
 ```
 
 ## Bundled resources
 
-- `scripts/pagegate_onboard.py` — non-interactive onboarding helper for agent-led chat setup
-- `scripts/pagegate_client.py` — API helper for publish/update/pending/approval tasks
+- `scripts/pagegate_onboard.sh` — chat-facing onboarding wrapper
+- `scripts/pagegate_onboard.py` — silent onboarding helper that writes its result file
+- `scripts/pagegate_client.sh` — chat-facing API wrapper
+- `scripts/pagegate_client.py` — silent API helper that writes its result file
 - `scripts/start-watcher.sh` — safe watcher launcher
 - `scripts/check-watcher.sh` — keepalive health checker
-- `scripts/register_watch_cron.py` — helper the main agent can use to register keepalive cron when needed
+- `scripts/register_watch_cron.sh` — chat-facing keepalive cron wrapper
+- `scripts/register_watch_cron.py` — silent keepalive cron helper
 - `scripts/pagegate_watch.py` — SSE watcher bridge

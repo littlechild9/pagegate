@@ -1,16 +1,39 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+DEFAULT_RESULT_FILE = os.path.expanduser("~/.openclaw/workspace/memory/pagegate-register-watch-cron-result.json")
+_DEVNULL = open(os.devnull, "w", encoding="utf-8")
+sys.stdout = _DEVNULL
+sys.stderr = _DEVNULL
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CHECK_WATCHER = SCRIPT_DIR / "check-watcher.sh"
 DEFAULT_JOB_NAME = "PageGate Watcher Keepalive"
 DEFAULT_CRON = "*/1 * * * *"
 DEFAULT_TIMEOUT_SECONDS = 20
+
+
+def result_file_path() -> Path:
+    return Path(os.environ.get("PAGEGATE_REGISTER_CRON_RESULT_FILE", DEFAULT_RESULT_FILE)).expanduser()
+
+
+def emit(payload: dict, exit_code: int = 0):
+    result_file = result_file_path()
+    result_file.parent.mkdir(parents=True, exist_ok=True)
+    result_file.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    raise SystemExit(exit_code)
+
+
+def fail(message: str, exit_code: int = 1, **extra):
+    payload = {"ok": False, "error": message}
+    payload.update(extra)
+    emit(payload, exit_code=exit_code)
 
 
 def extract_json(raw: str):
@@ -46,7 +69,7 @@ def find_jobs_by_name(name: str):
 
 def build_message():
     return (
-        "运行一次 PageGate watcher 健康检查，只执行这条命令，不要做额外探索：\n\n"
+        "请由 OpenClaw 主 agent 运行一次 PageGate watcher 健康检查，只执行这条命令，不要做额外探索：\n\n"
         f"`bash \"{CHECK_WATCHER}\"`\n\n"
         "直接返回命令 stdout；如果命令失败，只返回一行错误。"
     )
@@ -94,34 +117,28 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
+    if args.dry_run:
+        emit({
+            "ok": True,
+            "dryRun": True,
+            "action": "add",
+            "existingJobId": None,
+            "jobName": args.name,
+            "cron": args.cron,
+            "agentLed": True,
+            "checkWatcher": str(CHECK_WATCHER),
+            "command": build_command(args),
+        })
+
     if not CHECK_WATCHER.exists():
-        raise SystemExit(json.dumps({
-            "ok": False,
-            "error": f"check-watcher script not found: {CHECK_WATCHER}",
-        }, ensure_ascii=False))
+        fail(f"check-watcher script not found: {CHECK_WATCHER}")
 
     if not shutil.which("openclaw"):
-        raise SystemExit(json.dumps({
-            "ok": False,
-            "error": "openclaw CLI not found",
-        }, ensure_ascii=False))
+        fail("openclaw CLI not found")
 
     matching_jobs = find_jobs_by_name(args.name)
     existing_job = matching_jobs[0] if matching_jobs else None
     cmd = build_command(args, existing_job_id=existing_job.get("id") if existing_job else None)
-
-    if args.dry_run:
-        sys.stdout.write(json.dumps({
-            "ok": True,
-            "dryRun": True,
-            "action": "edit" if existing_job else "add",
-            "existingJobId": existing_job.get("id") if existing_job else None,
-            "jobName": args.name,
-            "cron": args.cron,
-            "checkWatcher": str(CHECK_WATCHER),
-            "command": cmd,
-        }, ensure_ascii=False, indent=2) + "\n")
-        return
 
     if existing_job:
         run(cmd)
@@ -132,13 +149,21 @@ def main():
         current_job = extract_json(run(cmd))
         action = "created"
 
-    sys.stdout.write(json.dumps({
+    emit({
         "ok": True,
         "action": action,
+        "agentLed": True,
         "job": current_job,
         "checkWatcher": str(CHECK_WATCHER),
-    }, ensure_ascii=False, indent=2) + "\n")
+    })
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except KeyboardInterrupt:
+        fail("Cancelled by user", exit_code=130)
+    except Exception as e:
+        fail(f"Unexpected error: {e}")

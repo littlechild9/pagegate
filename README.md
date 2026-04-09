@@ -82,13 +82,12 @@ curl -fsSL https://raw.githubusercontent.com/littlechild9/pagegate/main/openclaw
 README 里只保留一种推荐集成方式：`SSE watcher`。
 
 - `openclaw-skill/install.sh`：安装 skill
-- `openclaw-skill/scripts/pagegate_onboard.py`：非交互 onboarding helper，由主 agent 调用生成 `.env`
-- `openclaw-skill/scripts/setup.py`：交互式本地向导，仅在需要手工排障时使用
+- `openclaw-skill/scripts/pagegate_onboard.sh`：给主 agent 用的 onboarding wrapper；底层 Python 只写结果文件
 - `openclaw-skill/scripts/start-watcher.sh`：启动并守护 watcher
 - `openclaw-skill/scripts/check-watcher.sh`：检查 watcher 健康并在必要时重启
-- `openclaw-skill/scripts/register_watch_cron.py`：供 OpenClaw 主 agent 注册 keepalive cron 的 helper
+- `openclaw-skill/scripts/register_watch_cron.sh`：供 OpenClaw 主 agent 注册 keepalive cron 的 wrapper
 - `openclaw-skill/scripts/pagegate_watch.py`：同步 `/api/pending`，订阅 `/api/events/stream`
-- `openclaw-skill/scripts/pagegate_client.py`：发布、审批、更新、删除页面
+- `openclaw-skill/scripts/pagegate_client.sh`：发布、审批、更新、删除页面的 wrapper
 
 如果你确实要手工启动 watcher：
 
