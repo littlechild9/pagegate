@@ -7,6 +7,11 @@ admin_token: "replace-with-your-admin-token"
 registration:
   mode: "open"
 
+# Product-layer vs instance-layer branding
+branding:
+  product_name: "PageGate"
+  instance_name: "Xuan & Friends' PageGate"
+
 server:
   host: "0.0.0.0"
   port: 8888

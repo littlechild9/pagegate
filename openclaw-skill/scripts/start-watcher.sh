@@ -6,7 +6,7 @@
 #   1. 加载 skill 根目录下的 .env 文件（如果存在）
 #   2. 尽早重定向所有输出（stdout + stderr）到日志文件
 #   3. 杀掉已有的 watcher 进程
-#   4. 启动新的 watcher，崩溃后自动重启（指数退避 1s→2s→4s→5s）
+#   4. 启动新的 watcher，崩溃后自动重启（指数退避，最高 60s；配置错误时延后重试）
 
 set -euo pipefail
 
@@ -46,18 +46,23 @@ else
     exit 1
 fi
 
+# 杀掉已有 watcher
 log "stopping existing watcher"
 pkill -f "$WATCH_SCRIPT" 2>/dev/null || true
 sleep 1
 
-RESTART_DELAY=1
-MAX_DELAY=5
+# 自动重启循环
+RESTART_DELAY=2
+MAX_DELAY=60
 while true; do
     log "=== watcher started ==="
     if "$PYTHON_BIN" "$WATCH_SCRIPT"; then
         EXIT_CODE=0
     else
         EXIT_CODE=$?
+    fi
+    if [ "$EXIT_CODE" -eq 2 ]; then
+        RESTART_DELAY=30
     fi
     log "watcher exited (code=$EXIT_CODE), restarting in ${RESTART_DELAY}s"
     sleep "$RESTART_DELAY"

@@ -61,8 +61,8 @@ send_delay_ms = int(os.environ.get("PAGEGATE_WATCH_SEND_DELAY_MS", "1200"))
 reconnect_base_ms = max(1000, int(os.environ.get("PAGEGATE_WATCH_RECONNECT_MS", "3000")))
 reconnect_max_ms = max(reconnect_base_ms, int(os.environ.get("PAGEGATE_WATCH_RECONNECT_MAX_MS", "30000")))
 reconnect_reset_after_ms = max(reconnect_base_ms, int(os.environ.get("PAGEGATE_WATCH_RECONNECT_RESET_MS", "60000")))
-stream_read_timeout_sec = max(10, int(os.environ.get("PAGEGATE_WATCH_STREAM_TIMEOUT_SEC", "30")))
-pending_sync_interval_ms = int(os.environ.get("PAGEGATE_WATCH_PENDING_SYNC_MS", "30000"))
+stream_read_timeout_sec = max(30, int(os.environ.get("PAGEGATE_WATCH_STREAM_TIMEOUT_SEC", "90")))
+pending_sync_interval_ms = int(os.environ.get("PAGEGATE_WATCH_PENDING_SYNC_MS", "60000"))
 sync_pending_on_start = os.environ.get("PAGEGATE_WATCH_SYNC_PENDING", "1") == "1"
 health_heartbeat_sec = max(5, int(os.environ.get("PAGEGATE_WATCH_HEALTH_HEARTBEAT_SEC", "10")))
 verbose = os.environ.get("PAGEGATE_WATCH_VERBOSE", "0") == "1"
@@ -354,10 +354,7 @@ def stream_events():
 
         delay_ms = compute_reconnect_delay_ms(consecutive_failures, server_retry_ms)
         if verbose:
-            log(
-                f"[pagegate-watch] reconnect sleep {delay_ms}ms "
-                f"(failures={consecutive_failures}, server_retry={server_retry_ms})"
-            )
+            log(f"[pagegate-watch] reconnect sleep {delay_ms}ms (failures={consecutive_failures}, server_retry={server_retry_ms})")
         time.sleep(delay_ms / 1000.0)
 
 

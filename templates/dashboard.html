@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard — PageGate</title>
+    <title>Dashboard — {{ instance_name }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -50,6 +50,108 @@
             outline: none;
         }
         .search:focus { border-color: #999; }
+        .panel {
+            background: #fff;
+            border: 1px solid #e8e8e8;
+            border-radius: 14px;
+            padding: 18px 20px;
+            margin-bottom: 28px;
+        }
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 14px;
+        }
+        .panel-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .panel-desc {
+            font-size: 13px;
+            color: #666;
+        }
+        .owner-visitors {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .owner-visitor-item {
+            border: 1px solid #ececec;
+            border-radius: 12px;
+            padding: 14px 16px;
+            background: #fcfcfc;
+        }
+        .owner-visitor-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+        }
+        .owner-visitor-main {
+            min-width: 0;
+            flex: 1;
+        }
+        .owner-visitor-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .owner-visitor-name img {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+        }
+        .owner-visitor-meta {
+            font-size: 13px;
+            color: #666;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 14px;
+        }
+        .owner-visitor-pages {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .page-chip,
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .page-chip {
+            background: #f1f5f9;
+            color: #334155;
+        }
+        .status-chip-whitelisted {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .status-chip-pending {
+            background: #fff3e0;
+            color: #e65100;
+        }
+        .status-chip-normal {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+        .panel-empty {
+            font-size: 13px;
+            color: #666;
+            background: #f7f7f7;
+            border-radius: 10px;
+            padding: 14px 16px;
+        }
         .category-title {
             font-size: 13px;
             font-weight: 600;
@@ -150,10 +252,13 @@
         .btn-approve:hover { background: #e8f5e9; }
         .btn-reject { color: #c62828; border-color: #ef9a9a; }
         .btn-reject:hover { background: #fce4ec; }
+        .btn-whitelist { color: #1565c0; border-color: #90caf9; }
+        .btn-whitelist:hover { background: #e3f2fd; }
         .actions {
             display: flex;
             gap: 8px;
             margin-top: 8px;
+            flex-wrap: wrap;
         }
         .btn-action {
             padding: 4px 12px;
@@ -239,9 +344,70 @@
 <body>
     <div class="container">
         <header>
-            <h1>PageGate</h1>
-            <button class="btn-primary" onclick="showPublishModal()">发布新页面</button>
+            <h1>{{ instance_name }}</h1>
+            <div class="actions" style="margin-top:0;">
+                {% if owner_username %}
+                <a class="btn-action" href="{{ owner_home_url }}" target="_blank">查看 @{{ owner_username }}</a>
+                {% endif %}
+                <button class="btn-primary" onclick="showPublishModal()">发布新页面</button>
+            </div>
         </header>
+
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <div class="panel-title">用户级白名单</div>
+                    <div class="panel-desc">加入白名单后，访客可直接访问你账号名下的全部页面。适合把自己加入白名单做日常自测。</div>
+                </div>
+            </div>
+
+            {% if owner_visitors %}
+            <div class="owner-visitors">
+                {% for visitor in owner_visitors %}
+                <div class="owner-visitor-item">
+                    <div class="owner-visitor-top">
+                        <div class="owner-visitor-main">
+                            <div class="owner-visitor-name">
+                                {% if visitor.avatar %}<img src="{{ visitor.avatar }}" alt="">{% endif %}
+                                <span>{{ visitor.name or visitor.id }}</span>
+                                {% if visitor.whitelisted %}
+                                <span class="status-chip status-chip-whitelisted">已在白名单</span>
+                                {% elif visitor.pending_pages %}
+                                <span class="status-chip status-chip-pending">有待审批页面</span>
+                                {% else %}
+                                <span class="status-chip status-chip-normal">已申请过</span>
+                                {% endif %}
+                            </div>
+                            <div class="owner-visitor-meta">
+                                <span>{{ visitor.provider or '未知来源' }}</span>
+                                <span>{{ visitor.id }}</span>
+                                {% if visitor.first_seen %}
+                                <span>首次出现 {{ visitor.first_seen[:10] }}</span>
+                                {% endif %}
+                            </div>
+                            {% if visitor.requested_pages %}
+                            <div class="owner-visitor-pages">
+                                {% for slug in visitor.requested_pages %}
+                                <span class="page-chip">{{ slug }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="actions" style="margin-top:0;">
+                            {% if visitor.whitelisted %}
+                            <button class="btn-action" onclick="removeWhitelist('{{ visitor.id }}')">移出白名单</button>
+                            {% else %}
+                            <button class="btn-action btn-whitelist" onclick="addWhitelist('{{ visitor.id }}')">加入白名单</button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="panel-empty">还没有访客申请过你的页面。先用一个访客身份打开任意审批页或私密页，登录后就会出现在这里。</div>
+            {% endif %}
+        </section>
 
         <input type="text" class="search" placeholder="搜索页面..." oninput="filterPages(this.value)">
 
@@ -254,7 +420,7 @@
                     <div class="page-header">
                         <div>
                             <span class="page-title">
-                                <a href="{{ base_url }}/{{ page.slug }}" target="_blank">{{ page.title }}</a>
+                                <a href="{{ page.public_url }}" target="_blank">{{ page.title }}</a>
                             </span>
                             <span class="badge badge-{{ page.access }}">
                                 {% if page.access == 'public' %}公开{% elif page.access == 'approval' %}审批制{% else %}私密{% endif %}
@@ -284,13 +450,14 @@
                             {{ v.name }}
                             <button class="btn-sm btn-approve" onclick="approveVisitor('{{ page.slug }}', '{{ v.id }}')">通过</button>
                             <button class="btn-sm btn-reject" onclick="rejectVisitor('{{ page.slug }}', '{{ v.id }}')">拒绝</button>
+                            <button class="btn-sm btn-whitelist" onclick="addWhitelist('{{ v.id }}')">加入白名单</button>
                         </div>
                         {% endfor %}
                     </div>
                     {% endif %}
 
                     <div class="actions">
-                        <button class="btn-action" onclick="copyLink('{{ base_url }}/{{ page.slug }}')">复制链接</button>
+                        <button class="btn-action" onclick="copyLink('{{ page.public_url }}')">复制链接</button>
                         <button class="btn-action btn-danger" onclick="deletePage('{{ page.slug }}')">删除</button>
                     </div>
                 </div>
@@ -367,7 +534,18 @@
             });
             const data = await resp.json();
             if (data.ok) {
-                alert("发布成功！");
+                const pageUrl = data.url || "";
+                let copied = false;
+                if (pageUrl && navigator.clipboard && navigator.clipboard.writeText) {
+                    copied = await navigator.clipboard.writeText(pageUrl).then(() => true).catch(() => false);
+                }
+                hidePublishModal();
+                form.reset();
+                alert(
+                    pageUrl
+                        ? `发布成功！\n\n页面地址：${pageUrl}${copied ? "\n链接已复制到剪贴板。" : ""}`
+                        : "发布成功！"
+                );
                 window.location.reload();
             } else {
                 alert("发布失败：" + JSON.stringify(data));
@@ -404,6 +582,32 @@
                 method: "DELETE",
                 headers: { "Authorization": `Bearer ${TOKEN}` },
             });
+            window.location.reload();
+        }
+
+        async function addWhitelist(visitorId) {
+            const resp = await fetch(`${BASE}/api/visitors/${visitorId}/whitelist`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${TOKEN}` },
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.ok) {
+                alert("加入白名单失败：" + JSON.stringify(data));
+                return;
+            }
+            window.location.reload();
+        }
+
+        async function removeWhitelist(visitorId) {
+            const resp = await fetch(`${BASE}/api/visitors/${visitorId}/whitelist`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${TOKEN}` },
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.ok) {
+                alert("移出白名单失败：" + JSON.stringify(data));
+                return;
+            }
             window.location.reload();
         }
 

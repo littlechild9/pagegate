@@ -8,7 +8,7 @@
 #   2. 远程一键安装（从 GitHub）:
 #      curl -fsSL https://raw.githubusercontent.com/littlechild9/pagegate/main/openclaw-skill/install.sh | bash
 #
-# 安装后自动运行初始化向导。
+# 安装完成后由主 agent 在聊天中继续 onboarding。
 
 set -euo pipefail
 
@@ -33,6 +33,7 @@ SKILL_SUBDIR="openclaw-skill"
 
 # 安装目标目录（OpenClaw 标准路径）
 INSTALL_DIR="${HOME}/.openclaw/workspace/skills/${SKILL_NAME}"
+ONBOARDING_MARKER="${INSTALL_DIR}/.onboarding-pending"
 
 # ── Banner ────────────────────────────────────────────────────────
 printf "\n${CYAN}──────────────────────────────────────────────────${RESET}\n"
@@ -54,7 +55,11 @@ fi
 ok "Python: $($PYTHON --version 2>&1)"
 
 # ── 确定安装来源 ──────────────────────────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" 2>/dev/null)" && pwd 2>/dev/null || echo "")"
+SCRIPT_SOURCE="${BASH_SOURCE[0]-}"
+SCRIPT_DIR=""
+if [ -n "$SCRIPT_SOURCE" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd 2>/dev/null || echo "")"
+fi
 SOURCE_DIR=""
 
 # 情况 1：从本地代码仓库执行（install.sh 所在目录就是 skill 源）
@@ -123,30 +128,27 @@ if [ -f "$INSTALL_DIR/.env.backup" ]; then
     ok "已恢复之前的 .env 配置"
 fi
 
+# 标记是否需要继续 onboarding
+if [ -f "$INSTALL_DIR/.env" ]; then
+    rm -f "$ONBOARDING_MARKER"
+else
+    : > "$ONBOARDING_MARKER"
+fi
+
 # 设置可执行权限
-chmod +x "$INSTALL_DIR/scripts/setup.py" 2>/dev/null || true
 chmod +x "$INSTALL_DIR/scripts/start-watcher.sh" 2>/dev/null || true
 chmod +x "$INSTALL_DIR/scripts/check-watcher.sh" 2>/dev/null || true
 chmod +x "$INSTALL_DIR/scripts/register_watch_cron.py" 2>/dev/null || true
+chmod +x "$INSTALL_DIR/scripts/pagegate_onboard.py" 2>/dev/null || true
 
 ok "Skill 安装完成！"
 printf "\n"
 info "安装位置: $INSTALL_DIR"
 info "Skill 名称: $SKILL_NAME"
 
-# ── 运行初始化向导 ────────────────────────────────────────────────
+# ── 下一步：由主 agent 在聊天中完成 onboarding ───────────────────
 printf "\n"
-printf "  是否现在运行初始化向导？(Y/n): "
-read -r REPLY </dev/tty || REPLY="y"
-REPLY="${REPLY:-y}"
-if [[ "$REPLY" =~ ^[Yy是]$ ]]; then
-    printf "\n"
-    "$PYTHON" "$INSTALL_DIR/scripts/setup.py"
-else
-    printf "\n"
-    info "稍后可运行初始化向导："
-    info "  $PYTHON $INSTALL_DIR/scripts/setup.py"
-    printf "\n"
-    printf "${BOLD}安装完成！${RESET}\n"
-    printf "在 OpenClaw 中发送任何 PageGate 相关请求即可触发 skill。\n\n"
-fi
+printf "${BOLD}安装完成！${RESET}\n"
+info "接下来请直接在 OpenClaw 聊天里完成 PageGate onboarding。"
+info "安装脚本只负责安装，真正的向导由主 agent 在聊天里继续。"
+printf "\n"

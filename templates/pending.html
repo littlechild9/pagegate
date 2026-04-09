@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>等待审批 — {{ page.title }}</title>
+    <title>等待审批 — {{ page.title }} · {{ instance_name }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -74,8 +74,8 @@
     <div class="card">
         <div class="spinner" id="spinner"></div>
         <h1>{{ page.title }}</h1>
-        <p>你已通过钉钉登录，访问申请已自动提交</p>
-        <p style="color:#999;font-size:13px;">审批通过后会自动进入页面，无需手动刷新</p>
+        <p>你已完成登录，访问 {{ instance_name }} 上该页面的申请已自动提交</p>
+        <p style="color:#999;font-size:13px;">审批通过后会自动进入页面，无需手动操作</p>
 
         <div class="visitor-info">
             {% if visitor.avatar %}
@@ -84,7 +84,7 @@
             <span>{{ visitor.name }}</span>
         </div>
 
-        <div class="status" id="status">等待作者审批中...</div>
+        <div class="status" id="status">等待 {{ instance_name }} 管理员审批中...</div>
     </div>
 
     <script>
@@ -153,34 +153,74 @@
         }
 
         let fallbackTimer = null;
+        let approvalSource = null;
+        let esErrorCount = 0;
 
         function startFallbackPolling() {
             if (fallbackTimer) return;
             fallbackTimer = setInterval(checkApproval, 2000);
         }
 
-        let esReconnectDelay = 1000;
+        function stopFallbackPolling() {
+            if (!fallbackTimer) return;
+            clearInterval(fallbackTimer);
+            fallbackTimer = null;
+        }
+
+        function closeApprovalSource() {
+            if (!approvalSource) return;
+            try { approvalSource.close(); } catch (e) {}
+            approvalSource = null;
+        }
+
+        function handleStreamStatus(data) {
+            if (data.status === "approved") {
+                closeApprovalSource();
+                const latencyMs = data.published_at ? Math.round(elapsed() - data.published_at * 1000) : null;
+                markApproved(latencyMs);
+                return;
+            }
+            if (data.status === "rejected") {
+                closeApprovalSource();
+                stopFallbackPolling();
+                clearInterval(updateTimerId);
+                spinnerEl.style.display = "none";
+                statusEl.textContent = "访问请求已被拒绝";
+                statusEl.className = "status";
+                timerEl.textContent = "你可以稍后重新发起请求";
+                return;
+            }
+            if (data.status === "not_logged_in") {
+                closeApprovalSource();
+                stopFallbackPolling();
+                clearInterval(updateTimerId);
+                spinnerEl.style.display = "none";
+                statusEl.textContent = "登录状态已失效，请重新登录";
+                statusEl.className = "status";
+                return;
+            }
+        }
+
         function connectSSE() {
             if (!window.EventSource) { startFallbackPolling(); return; }
-            const source = new EventSource(`/api/check-approval/stream/${slug}`);
-            source.addEventListener("status", (event) => {
+            closeApprovalSource();
+            approvalSource = new EventSource(`/api/check-approval/stream/${slug}`);
+            approvalSource.addEventListener("status", (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    if (data.status === "approved") {
-                        source.close();
-                        const latencyMs = data.published_at ? Math.round(elapsed() - data.published_at * 1000) : null;
-                        markApproved(latencyMs);
-                    }
+                    handleStreamStatus(data);
                 } catch (e) {}
             });
-            source.onopen = () => {
-                esReconnectDelay = 1000;
+            approvalSource.onopen = () => {
+                esErrorCount = 0;
+                stopFallbackPolling();
             };
-            source.onerror = () => {
-                try { source.close(); } catch (e) {}
+            approvalSource.onerror = () => {
                 if (!approved) {
-                    setTimeout(connectSSE, esReconnectDelay);
-                    esReconnectDelay = Math.min(esReconnectDelay * 2, 30000);
+                    esErrorCount += 1;
+                    if (esErrorCount >= 3) {
+                        startFallbackPolling();
+                    }
                 }
             };
         }

@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@{{ owner.username }} · {{ product_name }}</title>
+    <style>
+        :root {
+            --bg: #f3efe8;
+            --paper: #fffdf8;
+            --ink: #1f1c18;
+            --muted: #6d665b;
+            --line: rgba(57, 44, 28, 0.14);
+            --accent: #234842;
+            --accent-soft: rgba(35, 72, 66, 0.10);
+            --soft: #ebe2d3;
+            --shadow: 0 18px 60px rgba(42, 32, 20, 0.10);
+            --radius: 24px;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", "Noto Serif SC", serif;
+            background:
+                radial-gradient(circle at top left, rgba(35, 72, 66, 0.10), transparent 32%),
+                radial-gradient(circle at top right, rgba(179, 91, 52, 0.10), transparent 28%),
+                var(--bg);
+            color: var(--ink);
+            line-height: 1.65;
+        }
+
+        a { color: inherit; }
+
+        .shell {
+            width: min(1040px, calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 38px 0 80px;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            color: var(--muted);
+            font-size: 14px;
+            margin-bottom: 28px;
+        }
+
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--ink);
+            text-decoration: none;
+        }
+
+        .brand-mark {
+            width: 12px;
+            height: 12px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #234842, #7da287);
+            box-shadow: 0 0 0 6px rgba(35, 72, 66, 0.10);
+        }
+
+        .panel {
+            background: color-mix(in srgb, var(--paper) 92%, white 8%);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+        }
+
+        .hero {
+            padding: 34px;
+            margin-bottom: 18px;
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.58), rgba(255,255,255,0.88)),
+                linear-gradient(135deg, rgba(35,72,66,0.08), rgba(179,91,52,0.08));
+        }
+
+        .eyebrow {
+            display: inline-block;
+            margin-bottom: 16px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--accent);
+            background: var(--soft);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(40px, 7vw, 72px);
+            line-height: 0.95;
+            letter-spacing: -0.045em;
+        }
+
+        .lead {
+            margin: 18px 0 0;
+            max-width: 44rem;
+            font-size: 18px;
+            color: var(--muted);
+        }
+
+        .visitor-strip {
+            display: inline-flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin-top: 18px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.72);
+            border: 1px solid var(--line);
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        .tabs {
+            padding: 12px;
+            margin-bottom: 18px;
+        }
+
+        .tab-switcher {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .tab-btn {
+            appearance: none;
+            border: 1px solid var(--line);
+            background: rgba(255,255,255,0.62);
+            color: var(--muted);
+            border-radius: 999px;
+            padding: 12px 16px;
+            font: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        .tab-btn strong {
+            font-size: 16px;
+            margin-left: 8px;
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        .pages {
+            padding: 28px;
+        }
+
+        .pages-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .pages-head h2 {
+            margin: 0 0 6px;
+            font-size: clamp(28px, 4vw, 42px);
+            line-height: 1.05;
+            letter-spacing: -0.03em;
+        }
+
+        .pages-head p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 16px;
+        }
+
+        .page-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .page-card {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            padding: 20px 22px;
+            border-radius: 20px;
+            border: 1px solid var(--line);
+            background: rgba(255,255,255,0.72);
+            transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+        }
+
+        .page-card:hover {
+            transform: translateY(-1px);
+            border-color: rgba(57, 44, 28, 0.24);
+            box-shadow: 0 8px 24px rgba(42, 32, 20, 0.07);
+        }
+
+        .page-card h3 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: var(--soft);
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .tag-access {
+            background: var(--accent-soft);
+        }
+
+        .desc {
+            margin-top: 10px;
+            font-size: 15px;
+            color: var(--muted);
+        }
+
+        .empty {
+            padding: 40px 20px;
+            text-align: center;
+            color: var(--muted);
+            border-radius: 20px;
+            border: 1px dashed var(--line);
+            background: rgba(255,255,255,0.46);
+        }
+
+        .notice,
+        .login-box {
+            margin-bottom: 18px;
+            padding: 18px 20px;
+            border-radius: 20px;
+            border: 1px solid var(--line);
+            background: rgba(255,255,255,0.66);
+        }
+
+        .notice strong,
+        .login-box strong {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--ink);
+        }
+
+        .notice p,
+        .login-box p {
+            margin: 0;
+            color: var(--muted);
+        }
+
+        .login-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 700;
+            text-decoration: none;
+            border: 1px solid var(--line);
+            background: white;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            border-color: #2563eb;
+            color: white;
+        }
+
+        .btn-dingtalk {
+            background: #0089ff;
+            border-color: #0089ff;
+            color: white;
+        }
+
+        .subtle {
+            margin-top: 12px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .subsection {
+            margin-top: 20px;
+        }
+
+        .subsection h3 {
+            margin: 0 0 10px;
+            font-size: 18px;
+        }
+
+        footer {
+            margin-top: 32px;
+            text-align: center;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        @media (max-width: 720px) {
+            .topbar,
+            .pages-head {
+                flex-direction: column;
+                align-items: start;
+            }
+
+            .hero,
+            .pages {
+                padding: 24px;
+            }
+
+            .login-actions {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <div class="topbar">
+            <a href="{{ base_url }}/" class="brand"><span class="brand-mark"></span> {{ instance_name }}</a>
+            <div>Personal gateway · hosted on {{ instance_name }}</div>
+        </div>
+
+        <section class="panel hero">
+            <span class="eyebrow">@{{ owner.username }}'s {{ product_name }}</span>
+            <h1>@{{ owner.username }}</h1>
+            <p class="lead">
+                这是 {{ instance_name }} 上属于 @{{ owner.username }} 的个人 PageGate。公开页面会一直出现在这里；如果你已经通过审批或被加入白名单，登录后还可以在「已授权给我」里看到自己可访问的非公开页面。
+            </p>
+            {% if viewer_logged_in and viewer %}
+            <div class="visitor-strip">
+                <span>当前访客：{{ viewer.name or viewer.id }}</span>
+                {% if owner_whitelisted %}
+                <span>你已在 @{{ owner.username }} 的用户级白名单中</span>
+                {% elif authorized_pages %}
+                <span>你有 {{ authorized_pages|length }} 个已授权页面</span>
+                {% elif pending_pages %}
+                <span>你有 {{ pending_pages|length }} 个页面正在等待审批</span>
+                {% else %}
+                <span>当前还没有已授权给你的非公开页面</span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="panel tabs">
+            <div class="tab-switcher">
+                <button class="tab-btn {% if default_tab == 'public' %}active{% endif %}" type="button" data-tab-target="public">
+                    公开页面 <strong>{{ public_pages|length }}</strong>
+                </button>
+                <button class="tab-btn {% if default_tab == 'authorized' %}active{% endif %}" type="button" data-tab-target="authorized">
+                    已授权给我
+                    <strong>{% if viewer_logged_in %}{{ authorized_pages|length }}{% else %}登录后可见{% endif %}</strong>
+                </button>
+            </div>
+        </section>
+
+        <section class="panel pages tab-panel {% if default_tab == 'public' %}active{% endif %}" data-tab-panel="public">
+            <div class="pages-head">
+                <div>
+                    <h2>公开页面</h2>
+                    <p>下面是 @{{ owner.username }} 当前公开可见的页面。</p>
+                </div>
+                <div style="color: var(--muted); font-size: 14px;">{{ public_pages|length }} public pages</div>
+            </div>
+
+            <div class="page-list">
+                {% if public_pages %}
+                    {% for page in public_pages %}
+                    <a href="{{ page.public_url }}" class="page-card">
+                        <h3>{{ page.title }}</h3>
+                        <div class="meta">
+                            <span class="tag">{{ page.category }}</span>
+                            <span>{{ page.created_at[:10] if page.created_at else '' }}</span>
+                        </div>
+                        {% if page.description %}
+                        <div class="desc">{{ page.description }}</div>
+                        {% endif %}
+                    </a>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty">
+                        @{{ owner.username }} 还没有公开页面。
+                    </div>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="panel pages tab-panel {% if default_tab == 'authorized' %}active{% endif %}" data-tab-panel="authorized">
+            <div class="pages-head">
+                <div>
+                    <h2>已授权给我</h2>
+                    <p>登录后，这里会聚合你已获准访问的审批页与私密页。</p>
+                </div>
+                <div style="color: var(--muted); font-size: 14px;">
+                    {% if viewer_logged_in %}
+                    {{ authorized_pages|length }} accessible pages
+                    {% else %}
+                    sign in required
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if viewer_blocked %}
+            <div class="empty">
+                当前访客账号已被禁用，不能查看 @{{ owner.username }} 的非公开内容。
+            </div>
+            {% elif not viewer_logged_in %}
+            <div class="login-box">
+                <strong>登录后查看你的已授权内容</strong>
+                <p>如果你已经被 @{{ owner.username }} 批准过某些页面，或已经被加入用户级白名单，登录后它们会出现在这里。</p>
+                <div class="login-actions">
+                    {% if has_dingtalk %}
+                        {% if is_mobile %}
+                        <a href="{{ dingtalk_mobile_login_url }}" class="btn btn-dingtalk">尝试唤起钉钉 App 登录</a>
+                        <a href="{{ dingtalk_login_url }}" class="btn">继续网页版钉钉登录</a>
+                        {% else %}
+                        <a href="{{ dingtalk_login_url }}" class="btn btn-dingtalk">使用钉钉登录</a>
+                        {% endif %}
+                    {% endif %}
+                    {% if has_wechat %}
+                    <a href="{{ wechat_login_url }}" class="btn btn-primary">使用微信登录</a>
+                    {% endif %}
+                </div>
+                {% if not has_dingtalk and not has_wechat %}
+                <p class="subtle">{{ instance_name }} 暂未配置登录方式，请联系管理员。</p>
+                {% elif is_mobile and is_dingtalk %}
+                <p class="subtle">当前看起来已经在钉钉环境里，点上面的按钮会直接继续授权。</p>
+                {% elif is_mobile %}
+                <p class="subtle">移动端会先尝试唤起钉钉 App，唤起失败时仍然可以继续走网页版登录。</p>
+                {% else %}
+                <p class="subtle">登录成功后你会回到这个个人首页，并自动切回「已授权给我」。</p>
+                {% endif %}
+            </div>
+            {% else %}
+                {% if owner_whitelisted %}
+                <div class="notice">
+                    <strong>你已在用户级白名单中</strong>
+                    <p>只要页面属于 @{{ owner.username }}，并且不是公开页，它都会在这里聚合出来。</p>
+                </div>
+                {% elif pending_pages %}
+                <div class="notice">
+                    <strong>还有页面等待审批</strong>
+                    <p>你有 {{ pending_pages|length }} 个访问请求还在等待 @{{ owner.username }} 处理。审批通过后，它们会自动出现在这里。</p>
+                </div>
+                {% endif %}
+
+                {% if authorized_pages %}
+                <div class="page-list">
+                    {% for page in authorized_pages %}
+                    <a href="{{ page.public_url }}" class="page-card">
+                        <h3>{{ page.title }}</h3>
+                        <div class="meta">
+                            <span class="tag tag-access">
+                                {% if page.access == 'approval' %}审批制{% else %}私密{% endif %}
+                            </span>
+                            <span class="tag">{{ page.category }}</span>
+                            <span>{{ page.created_at[:10] if page.created_at else '' }}</span>
+                        </div>
+                        {% if page.description %}
+                        <div class="desc">{{ page.description }}</div>
+                        {% endif %}
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty">
+                    你当前还没有被授权查看 @{{ owner.username }} 的非公开页面。
+                </div>
+                {% endif %}
+
+                {% if pending_pages %}
+                <div class="subsection">
+                    <h3>等待审批</h3>
+                    <div class="page-list">
+                        {% for page in pending_pages %}
+                        <a href="{{ page.public_url }}" class="page-card">
+                            <h3>{{ page.title }}</h3>
+                            <div class="meta">
+                                <span class="tag tag-access">待审批</span>
+                                <span>{{ page.created_at[:10] if page.created_at else '' }}</span>
+                            </div>
+                            <div class="desc">这个页面的访问请求已经提交，等待 @{{ owner.username }} 审批。</div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            {% endif %}
+        </section>
+
+        <footer>
+            Powered by {{ product_name }} · Personal gateway for @{{ owner.username }}
+        </footer>
+    </div>
+
+    <script>
+        const tabButtons = document.querySelectorAll("[data-tab-target]");
+        const tabPanels = document.querySelectorAll("[data-tab-panel]");
+
+        function activateTab(name) {
+            tabButtons.forEach((button) => {
+                button.classList.toggle("active", button.dataset.tabTarget === name);
+            });
+            tabPanels.forEach((panel) => {
+                panel.classList.toggle("active", panel.dataset.tabPanel === name);
+            });
+        }
+
+        tabButtons.forEach((button) => {
+            button.addEventListener("click", () => activateTab(button.dataset.tabTarget));
+        });
+    </script>
+</body>
+</html>

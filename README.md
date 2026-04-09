@@ -62,10 +62,12 @@ PageGate 最重要的 feature 不是上传页面，而是实时授权。
 安装命令：
 curl -fsSL https://raw.githubusercontent.com/littlechild9/pagegate/main/openclaw-skill/install.sh | bash
 
-如果安装脚本询问是否运行初始化向导，请选择 Y。
+安装完成后，继续在 OpenClaw 聊天里完成 onboarding。
 ```
 
-后续的托管服务器 / 自部署服务器选择、注册 / 登录、PageGate API token 保存、通知路由、watcher 启动和 keepalive cron 注册，都在 onboard 流程里完成。托管模式会默认使用 `http://115.190.148.77:8888`。
+后续的托管服务器 / 自部署服务器选择、给你的 PageGate 起名字、PageGate API token 保存、通知路由、watcher 启动和 keepalive cron 注册，都在 onboard 流程里完成。托管模式会默认使用 `http://115.190.148.77:8888`。
+
+完成注册后，每个用户都会拿到一个自己的个人 PageGate 入口，例如 `https://your-domain.com/<username>`。后续发布的页面会挂在这个入口下面，canonical URL 形如 `https://your-domain.com/<username>/<slug>/`。
 
 配置完成后，你通常只需要继续对 OpenClaw 说：
 
@@ -73,12 +75,15 @@ curl -fsSL https://raw.githubusercontent.com/littlechild9/pagegate/main/openclaw
 把 /absolute/path/page.html 发布到 PageGate，slug 用 my-page，标题用 我的页面，access 用 approval。
 ```
 
+发布成功后，这个页面会出现在你的个人 PageGate 下，例如 `https://your-domain.com/<username>/my-page/`。旧的扁平 `https://your-domain.com/my-page` 只保留兼容跳转，不再是主链接。
+
 ### OpenClaw skill 是怎么接进来的
 
 README 里只保留一种推荐集成方式：`SSE watcher`。
 
 - `openclaw-skill/install.sh`：安装 skill
-- `openclaw-skill/scripts/setup.py`：初始化向导，生成 `.env`
+- `openclaw-skill/scripts/pagegate_onboard.py`：非交互 onboarding helper，由主 agent 调用生成 `.env`
+- `openclaw-skill/scripts/setup.py`：交互式本地向导，仅在需要手工排障时使用
 - `openclaw-skill/scripts/start-watcher.sh`：启动并守护 watcher
 - `openclaw-skill/scripts/check-watcher.sh`：检查 watcher 健康并在必要时重启
 - `openclaw-skill/scripts/register_watch_cron.py`：向 OpenClaw 注册 keepalive cron job
@@ -128,6 +133,14 @@ server:
 ```bash
 python3 server.py
 ```
+
+### 路由模型
+
+开启注册后，PageGate 的默认链接结构是：
+
+- `/<username>`：这个用户的个人 PageGate 首页
+- `/<username>/<slug>/`：这个用户发布页面的 canonical URL
+- `/<slug>`：兼容旧链接时保留；如果命中用户页面，会重定向到 `/<username>/<slug>/`
 
 ### 部署到服务器
 
@@ -187,6 +200,8 @@ wechat:
 ${server.base_url}/auth/wechat/callback
 ```
 
+更完整的接入边界、移动端场景说明与改造建议见 [WECHAT_OAUTH.md](WECHAT_OAUTH.md)。
+
 ### 自托管之后，还是一句话交给 OpenClaw
 
 当你的自托管服务器准备好之后，继续把下面这段话贴给 OpenClaw，把域名换成你自己的：
@@ -194,7 +209,9 @@ ${server.base_url}/auth/wechat/callback
 ```text
 请开始 PageGate onboard，并使用我自托管的服务器 https://your-domain.com。
 
-如果服务器支持注册，请直接引导我注册或登录。
+如果服务器支持注册，请直接让我给这个 PageGate 起个名字，并完成 quick-register。
+注册完成后请直接告诉我 PageGate API token，并保存到本地 .env。
+如果 quick-register 成功，也请把返回的 `username`、`pagegate_name` 和 `pagegate_url` 一起告诉我，后续发布页面会使用 `/<username>/<slug>/` 作为主链接。
 如果服务器关闭注册，再向我询问现有的 PageGate API token。
 ```
 

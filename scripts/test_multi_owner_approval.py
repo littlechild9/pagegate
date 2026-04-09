@@ -241,10 +241,18 @@ class SandboxServer:
         assert self.client is not None
         signer = TimestampSigner(self.session_secret)
         cookie = signer.sign(visitor_id).decode()
-        return self.client.get(
+        response = self.client.get(
             f"/{slug}",
             cookies={"pagegate_session": cookie},
         )
+        if response.status_code in (301, 302, 307, 308):
+            location = response.headers.get("location", "")
+            if location:
+                return self.client.get(
+                    location,
+                    cookies={"pagegate_session": cookie},
+                )
+        return response
 
     def create_page_without_owner(self, slug: str, *, access: str = "approval") -> None:
         self.write_index({

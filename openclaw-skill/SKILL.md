@@ -1,89 +1,127 @@
 ---
 name: pagegate-client
-description: Onboard and manage PageGate from OpenClaw chat. On first use, ask whether the user wants the managed hosted server (recommended) or a self-hosted server, then guide registration/login or reuse an existing PageGate API token, configure OpenClaw notify routing, and start the realtime watcher. Also use this skill when publishing local HTML files to PageGate, checking pending visitors, approving or rejecting access requests, or updating page metadata and access mode.
+description: Onboard and manage PageGate from OpenClaw chat. Use when installing or configuring PageGate access, publishing local HTML files, checking pending visitors, approving or rejecting access requests, or updating page metadata and access mode. Onboarding must be led by the main agent in chat, not by an interactive local terminal wizard.
 ---
 
 # PageGate Client
 
 Use this skill as the chat-side client for a deployed PageGate server.
 
-## Onboarding
+## Agent-led onboarding only
 
-首次使用，或者缺少 `.env` / `PAGEGATE_URL` / `PAGEGATE_API_TOKEN` 时，不要先追问底层环境变量。直接开始 onboarding。
+When `.env` is missing, incomplete, `.onboarding-pending` exists, or the user asks to configure PageGate:
 
-优先使用初始化向导：
+- Run onboarding as a normal chat conversation.
+- Do **not** use PTY-driven local terminal question flows.
+- Ask only for missing information, one item or one grouped step at a time.
+- Prefer the hosted public server unless the user asks for self-hosted.
+- Use the SSE watcher bridge only. Do not configure webhook delivery.
+
+## Chat onboarding flow
+
+Ask and resolve values in this order:
+
+1. **Server choice**
+   - Default: hosted server `http://115.190.148.77:8888`
+   - If the user wants self-hosted, ask for the base URL.
+
+2. **PageGate auth**
+   - First ask whether the user already has an existing `PageGate API token`.
+   - If they do, use token mode directly.
+   - If they do not, ask them to give this PageGate a name in the format `{Name}'s PageGate`.
+   - Give at least two concrete examples when asking, for example `Xuan's PageGate` and `XCompany's PageGate`.
+   - Make the format explicit: tell the user this should look like `{Name}'s PageGate`.
+   - If OpenClaw already knows the user's name, prefer suggesting a prefilled candidate in the form `<known-name>'s PageGate`, then ask them to confirm or revise it.
+   - Do **not** ask ordinary hosted users for email/password by default.
+   - Do **not** ask ordinary hosted users for server `admin_token`.
+
+3. **OpenClaw notify route**
+   - Required: `OPENCLAW_NOTIFY_CHANNEL`, `OPENCLAW_NOTIFY_TARGET`, `OPENCLAW_NOTIFY_ACCOUNT`
+   - Use defaults or discovered values when available.
+   - If any route field is missing, ask for it explicitly.
+
+4. **Apply config non-interactively**
+   - After collecting values, call:
 
 ```bash
-python3 scripts/setup.py
+python3 scripts/pagegate_onboard.py \
+  --url http://115.190.148.77:8888 \
+  --auth-mode quick-register|token \
+  --pagegate-name "Xuan's PageGate" \
+  --api-token 'token-if-using-token-mode' \
+  --notify-channel openclaw-weixin \
+  --notify-target '<target-id>' \
+  --notify-account '<account-id>' \
+  --start-watcher
 ```
 
-onboarding 的顺序必须是：
+Notes:
+- For `auth-mode=quick-register`, provide `--pagegate-name`. The server will create the account and return the API token directly.
+- For `auth-mode=token`, omit `--pagegate-name` and provide `--api-token`.
+- Add `--send-test` only after the user agrees to receive a test notification.
+- The script writes `.env`, saves the API token and PageGate metadata to disk, clears `.onboarding-pending`, verifies PageGate access, optionally starts the watcher, and returns a single JSON result.
 
-1. 先问用户：`托管服务器（推荐）` 还是 `自部署服务器`
-2. 如果用户选择托管服务器：
-   - 默认服务器使用 `http://115.190.148.77:8888`
-   - 直接引导普通用户 `注册新账号` 或 `登录已有账号`
-   - 不要向托管服务器普通用户索取服务器 `admin_token`
-   - 只有用户明确说自己已经有 `PageGate API token` 时，才直接复用它
-3. 如果用户选择自部署服务器：
-   - 继续问：`已经有服务器` 还是 `需要先部署`
-   - 如果还没部署，先引导部署，再继续 onboarding
-   - 如果服务器支持注册，先引导普通用户注册或登录；不要默认要求服务器 `admin_token`
-   - 如果服务器关闭注册，或用户明确说自己已经有 token，再让用户提供现有 `PageGate API token`
-4. 获取到 PageGate API token 后，再配置 OpenClaw 通知路由
-5. 保存 `.env`
-6. 启动 watcher，并注册 keepalive cron
+When asking for `--pagegate-name`, prefer wording like:
 
-`PAGEGATE_API_TOKEN` 保存的是 PageGate API token。托管服务器普通用户的注册 / 登录 token，或者自部署服务器上可用的访问 token，都放在这里。服务器配置里的 `admin_token` 只属于自部署服务器管理员，不属于普通用户 onboarding 输入项。
-
-### 自建服务器
-
-如果你想搭建自己的 PageGate 服务器：
-
-```bash
-git clone https://github.com/littlechild9/pagegate
-cd pagegate
-pip install -r requirements.txt
-cp config.example.yaml config.yaml
-# 编辑 config.yaml 设置 admin_token、session_secret、base_url
-python3 server.py
+```text
+请先给你的 PageGate 起一个名字，格式是 {Name}'s PageGate。
+例如：Xuan's PageGate，XCompany's PageGate。
+如果你愿意，也可以直接用：<known-name>'s PageGate。
 ```
 
-部署到 Linux 服务器可使用一键部署脚本：`sudo bash deploy.sh your-domain.com`
-
-### 重新配置
-
-任何时候都可以重新运行 `python3 scripts/setup.py` 来更新配置。
+5. **Explain the result in chat**
+   - Confirm the server URL, whether watcher started, and whether a test message was sent.
+   - Explicitly show the user their `PageGate API token` once onboarding succeeds, and remind them it has already been saved into `.env`.
+   - Explicitly show the generated `username` when the server returns one.
+   - Explicitly show both the personal `PageGate URL` (`/<username>`) and the `dashboard URL`, and remind the user that both have already been saved into `.env`.
+   - Explain the split clearly: `PageGate URL` is the user's personal gateway homepage. Its `公开页面` tab shows public pages; after a visitor logs in, its `已授权给我` tab can show pages that visitor has been approved for. `dashboard URL` is where the owner manages all pages plus visitor approvals and whitelist state.
+   - After onboarding succeeds, proactively propose one real access test:
+     publish a small `approval` or `private` page, open it once with the user's own visitor identity, then help them run `python3 scripts/pagegate_client.py visitors`.
+   - If the user is doing self-testing, suggest adding that visitor to the current account's owner-level whitelist with `python3 scripts/pagegate_client.py whitelist-add --visitor-id <their-visitor-id>`.
+   - If route info or auth is still missing, ask for the next missing item instead of dumping raw script output.
 
 ## Runtime environment
 
-完成 onboarding 后，才期望这些环境变量存在：
+After onboarding, these variables should exist in `.env`:
 
 - `PAGEGATE_URL`
 - `PAGEGATE_API_TOKEN`
+- `PAGEGATE_USERNAME`
+- `PAGEGATE_HOME_URL`
+- `PAGEGATE_DASHBOARD_URL`
+- `OPENCLAW_NOTIFY_CHANNEL`
+- `OPENCLAW_NOTIFY_TARGET`
+- `OPENCLAW_NOTIFY_ACCOUNT`
 
-如果缺少其中任意一项，不要直接让用户手工 export；优先重新运行 `python3 scripts/setup.py` 进入 onboarding。
+If missing, continue onboarding in chat instead of asking the user to manually export variables.
 
-## Files and API behavior
+## Start real-time watching
 
-- Register a new account through `/api/auth/register`.
-- Login through `/api/auth/login`.
-- Publish local HTML by uploading a file with multipart form data to `/api/publish`.
-- Manage existing pages through `/api/pages/{slug}` and related visitor endpoints.
-- Read pending approvals from `/api/pending`.
-- Subscribe to real-time approval events from `/api/events/stream` through the bundled bridge watcher.
-- Deliver approval notifications through Gateway RPC `send` to the user's configured channel route.
-- Approval notifications may arrive as plain text messages containing page title, slug, visitor name, and visitor ID.
+Preferred launcher:
 
-## Core workflows
+```bash
+./scripts/start-watcher.sh
+```
 
-### 1. Publish a local page
+The watcher must keep stdout/stderr away from OpenClaw exec channels. Diagnostics belong in the log file only.
+
+Recommended after the first successful start:
+
+```bash
+python3 scripts/register_watch_cron.py
+```
+
+The keepalive helpers:
+- `scripts/check-watcher.sh` checks the health file, pid, and status, then restarts the watcher when needed
+- `scripts/register_watch_cron.py` creates or updates an OpenClaw cron job that runs `check-watcher.sh` every minute
+
+## Publish a local page
 
 When the user wants to publish a local HTML file:
 
 1. Confirm the local file path.
 2. Ask only for missing metadata: `slug`, `title`, optional `category`, optional `description`, and `access` (`public`, `approval`, or `private`).
-3. Call the helper script:
+3. Call:
 
 ```bash
 python3 scripts/pagegate_client.py publish \
@@ -96,10 +134,15 @@ python3 scripts/pagegate_client.py publish \
 ```
 
 4. Return the published URL clearly.
+   - Always return the single-page canonical URL first.
+   - If `access=public` and `PAGEGATE_HOME_URL` exists, also remind the user that this page will appear in the `公开页面` tab of their personal PageGate homepage.
+   - If `access=approval` or `access=private`, explicitly tell the user that this page will **not** automatically appear in the public `公开页面` tab; direct them to the `dashboard URL` for the full page list and access management.
+   - For `access=approval` or `access=private`, also explain that once a visitor is approved or whitelisted and logs in at the owner's `PageGate URL`, the page can appear in that visitor's `已授权给我` tab.
+   - When `dashboard URL` exists, mention it as the place to review all pages, pending approvals, approved visitors, and owner-level whitelist state.
 
-If the user already gave enough info, do not ask redundant questions.
+Do not forward raw JSON to the user unless they ask.
 
-### 2. List pages or pending approvals
+## Pending approvals
 
 Use:
 
@@ -107,72 +150,47 @@ Use:
 python3 scripts/pagegate_client.py pending
 ```
 
-For page management tasks where the server lacks a list API, inspect local `data/index.json` on the server side only if the user explicitly says this OpenClaw instance is running next to the server files. Otherwise explain that remote PageGate currently exposes pending requests, but not a general page list endpoint.
+Format pending requests as a short list with page, visitor, and visitor ID.
 
-### 3. Start real-time watching
+## Owner-level whitelist
 
-**Preferred: use the launcher script** (handles output redirection automatically):
+This whitelist is scoped to the current PageGate user, not global.
 
-```bash
-# First time: prefer running the setup wizard
-python3 scripts/setup.py
-# Or copy .env.example and fill in the values manually
-# cp .env.example .env
+If a visitor is added to your whitelist, they can access all pages owned by your user account without re-requesting approval page by page.
 
-# Start the watcher
-./scripts/start-watcher.sh
-
-# Register the keepalive cron in OpenClaw (recommended)
-python3 scripts/register_watch_cron.py
-```
-
-The launcher script:
-- Loads config from `.env` automatically
-- Uses `exec >> logfile 2>&1` to redirect all output — **critical**: stray stdout/stderr from background Python processes can crash the OpenClaw gateway exec listener
-- Kills any existing watcher process before starting fresh
-
-The keepalive helpers:
-- `scripts/check-watcher.sh` checks the health file, pid, and status, then restarts the watcher when needed
-- `scripts/register_watch_cron.py` creates or updates an OpenClaw cron job that runs `check-watcher.sh` every minute
-
-**Manual start** (if you prefer):
+List visitors who have previously requested pages from you:
 
 ```bash
-# All output MUST be redirected to avoid gateway crashes
-python3 scripts/pagegate_watch.py >> ~/.openclaw/workspace/memory/pagegate-watch.log 2>&1 &
+python3 scripts/pagegate_client.py visitors
 ```
 
-Required environment for the bridge:
+```bash
+python3 scripts/pagegate_client.py whitelist-add --visitor-id dingtalk_oABC123
+```
 
-- `PAGEGATE_URL`
-- `PAGEGATE_API_TOKEN`
-- `OPENCLAW_NOTIFY_CHANNEL`
-- `OPENCLAW_NOTIFY_TARGET`
-- `OPENCLAW_NOTIFY_ACCOUNT`
+Remove a visitor from your whitelist:
 
-Optional environment:
+```bash
+python3 scripts/pagegate_client.py whitelist-remove --visitor-id dingtalk_oABC123
+```
 
-- `OPENCLAW_GATEWAY_URL`
-- `OPENCLAW_GATEWAY_TOKEN`
-- `PAGEGATE_WATCH_LOG_FILE`
-- `PAGEGATE_WATCH_HEALTH_FILE`
+When presenting visitor results in chat, show:
+- visitor name
+- visitor ID
+- whether they are already whitelisted
+- which of your pages they have requested
 
-The bridge watcher:
+If `PAGEGATE_DASHBOARD_URL` exists, remind the user they can open it to verify the current whitelist and approval state visually.
 
-- keeps the outbound SSE connection to PageGate,
-- deduplicates pending + stream events by event id,
-- rate-limits delivery,
-- forwards events through Gateway RPC `send` to the configured OpenClaw channel route,
-- writes diagnostics to a log file instead of noisy stdout by default,
-- updates a health file periodically so the keepalive job can detect stale or dead watchers.
+For onboarding follow-up or self-testing, recommend this sequence:
+- publish one `approval` or `private` page
+- open it once with the same person who will be whitelisted
+- run `python3 scripts/pagegate_client.py visitors`
+- then run `python3 scripts/pagegate_client.py whitelist-add --visitor-id <their-visitor-id>`
 
-**Important**: OpenClaw's background exec listener is fragile — any stderr/stdout output from the watcher process can crash the gateway. Always use `>> file 2>&1` or the launcher script.
+## Approve or reject a visitor
 
-Use it in a background session or process manager, not as a one-shot foreground chat step.
-
-### 4. Approve or reject a visitor
-
-If the current message is a notification like:
+When the current message contains a notification like:
 
 ```text
 有人想查看你的页面
@@ -181,18 +199,17 @@ If the current message is a notification like:
 访客ID：dingtalk_oABC123
 ```
 
-extract:
+Extract:
+- `slug = xian-trip`
+- `visitor_id = dingtalk_oABC123`
 
-- slug: `xian-trip`
-- visitor_id: `dingtalk_oABC123`
-
-Then, when the user replies with approval intent, run:
+Approve:
 
 ```bash
 python3 scripts/pagegate_client.py approve --slug xian-trip --visitor-id dingtalk_oABC123
 ```
 
-For rejection intent, run:
+Reject:
 
 ```bash
 python3 scripts/pagegate_client.py reject --slug xian-trip --visitor-id dingtalk_oABC123
@@ -212,9 +229,13 @@ Treat these as rejection intents:
 - `reject`
 - `不行`
 
-After success, reply briefly and clearly.
+After an approval, rejection, whitelist add, whitelist remove, or revoke action succeeds:
+- confirm the page slug and visitor ID that were affected
+- after an approval or whitelist add, if `PAGEGATE_HOME_URL` exists, mention that the visitor can log in at that PageGate homepage and look under `已授权给我`
+- if `PAGEGATE_DASHBOARD_URL` exists, remind the user they can open it to review the updated authorization state
+- do not claim the personal `PageGate URL` exposes all owner pages publicly; its `公开页面` tab is public, while `已授权给我` is personalized per logged-in visitor
 
-### 5. Update page metadata or access mode
+## Update page metadata or access mode
 
 Use:
 
@@ -227,7 +248,7 @@ python3 scripts/pagegate_client.py update \
 
 Only send fields the user actually wants changed.
 
-### 6. Delete or revoke
+## Delete or revoke
 
 These are destructive. Confirm before acting.
 
@@ -237,19 +258,17 @@ Delete page:
 python3 scripts/pagegate_client.py delete --slug my-page
 ```
 
-Revoke a visitor from a page:
+Revoke a visitor:
 
 ```bash
 python3 scripts/pagegate_client.py revoke --slug my-page --visitor-id some_visitor
 ```
 
-## Response style
+## Bundled resources
 
-- Keep replies short and operational.
-- When publishing, include the URL.
-- When showing pending requests, format as a simple list with page, visitor, and visitor ID.
-- When blocked by missing env vars or missing file paths, say exactly what is missing.
-
-## Bundled resource
-
-Use `scripts/pagegate_client.py` for all API calls instead of rewriting ad-hoc curl commands.
+- `scripts/pagegate_onboard.py` — non-interactive onboarding helper for agent-led chat setup
+- `scripts/pagegate_client.py` — API helper for publish/update/pending/approval tasks
+- `scripts/start-watcher.sh` — safe watcher launcher
+- `scripts/check-watcher.sh` — keepalive health checker
+- `scripts/register_watch_cron.py` — OpenClaw cron registration helper
+- `scripts/pagegate_watch.py` — SSE watcher bridge
