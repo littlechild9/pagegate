@@ -1,122 +1,361 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PageGate</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-            background: #fafafa;
-            color: #1a1a1a;
-            line-height: 1.6;
-        }
-        .container {
-            max-width: 720px;
-            margin: 0 auto;
-            padding: 60px 24px;
-        }
-        header {
-            margin-bottom: 48px;
-        }
-        header h1 {
-            font-size: 28px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-        }
-        header p {
-            color: #666;
-            margin-top: 8px;
-            font-size: 15px;
-        }
-        .page-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .page-card {
-            background: #fff;
-            border: 1px solid #e8e8e8;
-            border-radius: 12px;
-            padding: 20px 24px;
-            text-decoration: none;
-            color: inherit;
-            transition: border-color 0.15s, box-shadow 0.15s;
-        }
-        .page-card:hover {
-            border-color: #d0d0d0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        }
-        .page-card h2 {
-            font-size: 17px;
-            font-weight: 600;
-        }
-        .page-card .meta {
-            display: flex;
-            gap: 12px;
-            margin-top: 6px;
-            font-size: 13px;
-            color: #888;
-        }
-        .page-card .desc {
-            margin-top: 8px;
-            font-size: 14px;
-            color: #555;
-        }
-        .tag {
-            display: inline-block;
-            background: #f0f0f0;
-            color: #666;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-        .empty {
-            text-align: center;
-            color: #999;
-            padding: 80px 0;
-            font-size: 15px;
-        }
-        footer {
-            margin-top: 60px;
-            text-align: center;
-            font-size: 13px;
-            color: #bbb;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Xuan & Friends' PageGate</title>
+  <style>
+    :root {
+      --bg: #f4efe6;
+      --paper: #fffdf8;
+      --ink: #1f1c18;
+      --muted: #6b6357;
+      --line: rgba(57, 44, 28, 0.14);
+      --accent: #b35b34;
+      --accent-2: #234842;
+      --soft: #ebe2d3;
+      --shadow: 0 18px 60px rgba(42, 32, 20, 0.10);
+      --radius: 24px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", "Noto Serif SC", serif;
+      background:
+        radial-gradient(circle at top left, rgba(179, 91, 52, 0.10), transparent 32%),
+        radial-gradient(circle at top right, rgba(35, 72, 66, 0.10), transparent 28%),
+        var(--bg);
+      color: var(--ink);
+      line-height: 1.65;
+    }
+    .shell {
+      width: min(1120px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 40px 0 88px;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding-bottom: 28px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .brand {
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--ink);
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 24px;
+      align-items: stretch;
+    }
+    .panel {
+      background: color-mix(in srgb, var(--paper) 92%, white 8%);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .hero-copy {
+      padding: 36px 34px 34px;
+    }
+    .eyebrow {
+      display: inline-block;
+      margin-bottom: 16px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent-2);
+      background: var(--soft);
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(40px, 7vw, 82px);
+      line-height: 0.95;
+      letter-spacing: -0.045em;
+    }
+    .lead {
+      margin: 20px 0 0;
+      max-width: 38rem;
+      font-size: 19px;
+      color: var(--muted);
+    }
+    .install-box {
+      margin-top: 24px;
+      padding: 18px;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.80);
+    }
+    .install-box p {
+      margin: 0 0 12px;
+      font-size: 15px;
+    }
+    .copy-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .copy-box {
+      margin: 0;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: #f7f0e6;
+      border: 1px solid rgba(57, 44, 28, 0.10);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 14px;
+      line-height: 1.55;
+      color: #1d2826;
+      word-break: break-word;
+      cursor: pointer;
+    }
+    .copy-btn {
+      min-width: 116px;
+      border: 1px solid transparent;
+      border-radius: 18px;
+      background: var(--accent-2);
+      color: var(--paper);
+      font-weight: 700;
+      padding: 0 16px;
+      cursor: pointer;
+      transition: transform 160ms ease;
+    }
+    .copy-btn:hover { transform: translateY(-1px); }
+    .copy-hint {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      min-height: 48px;
+      padding: 0 18px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 700;
+      border: 1px solid transparent;
+      transition: transform 160ms ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-secondary {
+      background: transparent;
+      color: var(--ink);
+      border-color: var(--line);
+    }
+    .hero-side {
+      padding: 26px;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.58), rgba(255,255,255,0.88)),
+        linear-gradient(135deg, rgba(179,91,52,0.08), rgba(35,72,66,0.10));
+    }
+    .mini-note {
+      padding: 16px 18px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.64);
+    }
+    .mini-note strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent-2);
+    }
+    .section {
+      margin-top: 30px;
+      padding: 30px;
+    }
+    .section h2 {
+      margin: 0 0 14px;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }
+    .section p {
+      margin: 0 0 14px;
+      font-size: 17px;
+      color: var(--muted);
+    }
+    .focus-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 18px;
+    }
+    .focus-card {
+      padding: 22px;
+      border-radius: 22px;
+      background: rgba(255,255,255,0.64);
+      border: 1px solid var(--line);
+    }
+    .focus-card h3 {
+      margin: 0 0 8px;
+      font-size: 20px;
+    }
+    .focus-card p {
+      margin: 0;
+      font-size: 15px;
+    }
+    .focus-card .tag {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: var(--soft);
+      color: var(--accent-2);
+    }
+    .pages-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .pages-head p { margin: 0; }
+    .page-list { display: grid; gap: 12px; }
+    .page-card {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      padding: 20px 22px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.72);
+      transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+    }
+    .page-card:hover {
+      transform: translateY(-1px);
+      border-color: rgba(57, 44, 28, 0.24);
+      box-shadow: 0 8px 24px rgba(42, 32, 20, 0.07);
+    }
+    .page-card h3 { margin: 0; font-size: 22px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+    .tag-pg { display: inline-block; padding: 4px 10px; border-radius: 999px; background: var(--soft); color: var(--accent-2); font-size: 12px; font-weight: 700; }
+    .desc { margin-top: 10px; font-size: 15px; color: var(--muted); }
+    .empty { padding: 40px 20px; text-align: center; color: var(--muted); border-radius: 20px; border: 1px dashed var(--line); background: rgba(255,255,255,0.46); }
+    footer { margin-top: 36px; text-align: center; color: var(--muted); font-size: 13px; }
+    footer a { color: var(--accent-2); text-decoration: none; }
+    @media (max-width: 920px) {
+      .hero, .focus-grid, .copy-row { grid-template-columns: 1fr; }
+      .pages-head { align-items: start; flex-direction: column; }
+      .hero-copy, .hero-side, .section { padding: 24px; }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>PageGate</h1>
-            <p>AI 生成的页面合集</p>
-        </header>
+  <div class="shell">
 
-        <div class="page-list">
-            {% if pages %}
-                {% for page in pages %}
-                <a href="{{ base_url }}/{{ page.slug }}" class="page-card">
-                    <h2>{{ page.title }}</h2>
-                    <div class="meta">
-                        <span class="tag">{{ page.category }}</span>
-                        <span>{{ page.created_at[:10] if page.created_at else '' }}</span>
-                    </div>
-                    {% if page.description %}
-                    <div class="desc">{{ page.description }}</div>
-                    {% endif %}
-                </a>
-                {% endfor %}
-            {% else %}
-                <div class="empty">
-                    <p>还没有公开页面</p>
-                </div>
-            {% endif %}
+    <div class="topbar">
+      <div class="brand">Xuan &amp; Friends' PageGate</div>
+      <div>A personal HTML gateway for AI-era creators and builders.</div>
+    </div>
+
+    <section class="hero">
+      <article class="panel hero-copy">
+        <span class="eyebrow">Personal HTML Gateway</span>
+        <h1>这是 Xuan &amp;<br>Friends' PageGate。</h1>
+        <p class="lead">
+          一个面向 AI 时代创造者的小型 HTML 分享网关。页面可以公开发布，也可以先登录再审批。重要的是：谁能进来，由你决定。
+        </p>
+
+        <div class="install-box">
+          <p><strong>想拥有自己的 PageGate？把下面这句话直接 copy 给 OpenClaw：</strong></p>
+          <div class="copy-row">
+            <div class="copy-box" id="install-text">请先安装 PageGate 的 OpenClaw skill：
+curl -fsSL https://raw.githubusercontent.com/littlechild9/pagegate/main/openclaw-skill/install.sh | bash</div>
+            <button class="copy-btn" id="copy-install" type="button">一键复制</button>
+          </div>
+          <div class="copy-hint" id="copy-hint">复制后，直接粘贴给 OpenClaw 即可。</div>
         </div>
 
-        <footer>
-            Powered by PageGate
-        </footer>
-    </div>
+        <div class="cta-row">
+          <a class="btn btn-secondary" href="https://github.com/littlechild9/pagegate" target="_blank" rel="noopener noreferrer">去 GitHub 点个 Star ↗</a>
+        </div>
+      </article>
+
+      <aside class="panel hero-side">
+        <div class="mini-note">
+          <strong>实例层</strong>
+          Xuan &amp; Friends' PageGate 是一个小空间。不是内容广场，而是一个有边界、有主人的私人分享入口。
+        </div>
+        <div class="mini-note">
+          <strong>产品层</strong>
+          PageGate 是一个给 HTML 页面加上访问控制的分享网关。核心不是"上传内容"，而是"决定谁能看"。
+        </div>
+        <div class="mini-note">
+          <strong>想法</strong>
+          让 AI 生成的内容在分享时拥有真实的边界和审批权，而不是默认全部公开。
+        </div>
+      </aside>
+    </section>
+
+        <section class="panel section">
+      <h2>为什么这个 PageGate 以 Xuan &amp; Friends' 的名义存在</h2>
+      <p>
+        在 AI 让"生成一个 HTML 页面"变得非常便宜的今天，真正稀缺的不再是内容，而是<strong>决定谁能看见的权力</strong>。
+      </p>
+      <p>
+        PageGate 不是为了替代博客或文档站而存在的。它服务于一个更具体的场景：当你想把 AI 生成的东西发给特定的人，并且想保留最后的审批权——这时候它才真正发挥价值。
+      </p>
+    </section>
+
+
+    <footer>
+      Powered by PageGate · This instance is Xuan &amp; Friends' PageGate<br>
+      <a href="https://github.com/littlechild9/pagegate" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      var text = document.getElementById('install-text');
+      var button = document.getElementById('copy-install');
+      var hint = document.getElementById('copy-hint');
+      if (!text || !button || !hint) return;
+      var content = text.textContent;
+      async function copyText() {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(content);
+          } else {
+            var area = document.createElement('textarea');
+            area.value = content;
+            document.body.appendChild(area);
+            area.select();
+            document.execCommand('copy');
+            document.body.removeChild(area);
+          }
+          button.textContent = '已复制';
+          hint.textContent = '复制成功，现在直接粘贴给 OpenClaw 就行。';
+          setTimeout(function () { button.textContent = '一键复制'; }, 1800);
+        } catch (err) {
+          hint.textContent = '自动复制失败了，不过你可以手动复制上面的整句话。';
+        }
+      }
+      button.addEventListener('click', copyText);
+      text.addEventListener('click', copyText);
+    })();
+  </script>
 </body>
 </html>
