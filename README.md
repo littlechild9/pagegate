@@ -65,7 +65,7 @@ curl -fsSL https://raw.githubusercontent.com/littlechild9/pagegate/main/openclaw
 如果安装脚本询问是否运行初始化向导，请选择 Y。
 ```
 
-后续的托管服务器 / 自部署服务器选择、注册 / 登录、PageGate API token 保存、通知路由和 watcher 启动，都在 onboard 流程里完成。托管模式会默认使用 `http://115.190.148.77:8888`。
+后续的托管服务器 / 自部署服务器选择、注册 / 登录、PageGate API token 保存、通知路由、watcher 启动和 keepalive cron 注册，都在 onboard 流程里完成。托管模式会默认使用 `http://115.190.148.77:8888`。
 
 配置完成后，你通常只需要继续对 OpenClaw 说：
 
@@ -80,6 +80,8 @@ README 里只保留一种推荐集成方式：`SSE watcher`。
 - `openclaw-skill/install.sh`：安装 skill
 - `openclaw-skill/scripts/setup.py`：初始化向导，生成 `.env`
 - `openclaw-skill/scripts/start-watcher.sh`：启动并守护 watcher
+- `openclaw-skill/scripts/check-watcher.sh`：检查 watcher 健康并在必要时重启
+- `openclaw-skill/scripts/register_watch_cron.py`：向 OpenClaw 注册 keepalive cron job
 - `openclaw-skill/scripts/pagegate_watch.py`：同步 `/api/pending`，订阅 `/api/events/stream`
 - `openclaw-skill/scripts/pagegate_client.py`：发布、审批、更新、删除页面
 
@@ -88,6 +90,9 @@ README 里只保留一种推荐集成方式：`SSE watcher`。
 ```bash
 cd ~/.openclaw/workspace/skills/pagegate-client
 ./scripts/start-watcher.sh
+
+# 推荐再注册一个 OpenClaw keepalive cron
+python3 scripts/register_watch_cron.py
 ```
 
 ## 第二部分：自托管服务器

@@ -1,25 +1,45 @@
 #!/usr/bin/env python3
 import json
 import os
+import random
 import re
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime
 from urllib import request
 from urllib.parse import quote
 
-# Redirect stderr to stdout so nohup >>file 2>&1 captures everything
-# (OpenClaw background exec is sensitive to stray stderr output)
-sys.stderr = sys.stdout
+log_file = os.environ.get(
+    "PAGEGATE_WATCH_LOG_FILE",
+    os.path.expanduser("~/.openclaw/workspace/memory/pagegate-watch.log"),
+)
+
+_DEVNULL = open(os.devnull, "w", encoding="utf-8")
+sys.stdout = _DEVNULL
+sys.stderr = _DEVNULL
+
+
+def ensure_parent_dir(path: str):
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
 
 
 def env(name: str, required: bool = True) -> str:
     value = os.environ.get(name, "").strip()
     if required and not value:
-        print(f"Missing required environment variable: {name}", file=sys.stderr)
+        log(f"[pagegate-watch] missing required environment variable: {name}")
         sys.exit(2)
     return value.rstrip("/") if name in ("PAGEGATE_URL", "OPENCLAW_GATEWAY_URL") else value
+
+
+def log(msg: str):
+    line = f"[{datetime.now().isoformat(timespec='seconds')}] {msg}"
+    ensure_parent_dir(log_file)
+    with open(log_file, "a", encoding="utf-8") as f:
+        f.write(line + "\n")
 
 
 base_url = env("PAGEGATE_URL")
@@ -33,22 +53,51 @@ state_file = os.environ.get(
     "PAGEGATE_WATCH_STATE_FILE",
     os.path.expanduser("~/.openclaw/workspace/memory/pagegate-watch-state.json"),
 )
-send_delay_ms = int(os.environ.get("PAGEGATE_WATCH_SEND_DELAY_MS", "1200"))
-reconnect_delay_ms = int(os.environ.get("PAGEGATE_WATCH_RECONNECT_MS", "2000"))
-sync_pending_on_start = os.environ.get("PAGEGATE_WATCH_SYNC_PENDING", "1") == "1"
-verbose = os.environ.get("PAGEGATE_WATCH_VERBOSE", "0") == "1"
-log_file = os.environ.get(
-    "PAGEGATE_WATCH_LOG_FILE",
-    os.path.expanduser("~/.openclaw/workspace/memory/pagegate-watch.log"),
+health_file = os.environ.get(
+    "PAGEGATE_WATCH_HEALTH_FILE",
+    os.path.expanduser("~/.openclaw/workspace/memory/pagegate-watch-health.json"),
 )
+send_delay_ms = int(os.environ.get("PAGEGATE_WATCH_SEND_DELAY_MS", "1200"))
+reconnect_base_ms = max(1000, int(os.environ.get("PAGEGATE_WATCH_RECONNECT_MS", "3000")))
+reconnect_max_ms = max(reconnect_base_ms, int(os.environ.get("PAGEGATE_WATCH_RECONNECT_MAX_MS", "30000")))
+reconnect_reset_after_ms = max(reconnect_base_ms, int(os.environ.get("PAGEGATE_WATCH_RECONNECT_RESET_MS", "60000")))
+stream_read_timeout_sec = max(10, int(os.environ.get("PAGEGATE_WATCH_STREAM_TIMEOUT_SEC", "30")))
+pending_sync_interval_ms = int(os.environ.get("PAGEGATE_WATCH_PENDING_SYNC_MS", "30000"))
+sync_pending_on_start = os.environ.get("PAGEGATE_WATCH_SYNC_PENDING", "1") == "1"
+health_heartbeat_sec = max(5, int(os.environ.get("PAGEGATE_WATCH_HEALTH_HEARTBEAT_SEC", "10")))
+verbose = os.environ.get("PAGEGATE_WATCH_VERBOSE", "0") == "1"
+
+state_lock = threading.RLock()
+health_stop_event = threading.Event()
+started_at_iso = datetime.now().isoformat(timespec='seconds')
+health = {
+    "pid": os.getpid(),
+    "started_at": started_at_iso,
+    "status": "starting",
+    "last_connect_at": None,
+    "last_event_at": None,
+    "last_pending_sync_at": None,
+    "last_send_ok_at": None,
+    "last_error": "",
+    "consecutive_failures": 0,
+    "last_event_id": "",
+    "last_heartbeat_at": None,
+    "heartbeat_interval_sec": health_heartbeat_sec,
+}
 
 
-def log(msg: str):
-    # Write to file only — no stdout/stderr to avoid OpenClaw exec listener issues
-    line = f"[{datetime.now().isoformat(timespec='seconds')}] {msg}"
-    os.makedirs(os.path.dirname(log_file), exist_ok=True)
-    with open(log_file, "a", encoding="utf-8") as f:
-        f.write(line + "\n")
+def update_health(**fields):
+    with state_lock:
+        health.update(fields)
+        health["updated_at"] = datetime.now().isoformat(timespec='seconds')
+        ensure_parent_dir(health_file)
+        with open(health_file, "w", encoding="utf-8") as f:
+            json.dump(health, f, ensure_ascii=False, indent=2)
+
+
+def health_heartbeat_loop():
+    while not health_stop_event.wait(health_heartbeat_sec):
+        update_health(last_heartbeat_at=datetime.now().isoformat(timespec='seconds'))
 
 
 def load_state():
@@ -59,24 +108,27 @@ def load_state():
         state = {}
     state.setdefault("last_event_id", "")
     state.setdefault("sent_ids", [])
+    update_health(last_event_id=state.get("last_event_id", ""))
     return state
 
 
 def save_state(state):
-    os.makedirs(os.path.dirname(state_file), exist_ok=True)
+    ensure_parent_dir(state_file)
     with open(state_file, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
+    update_health(last_event_id=state.get("last_event_id", ""))
 
 
 def remember_sent(state, event_id):
-    sent_ids = state.setdefault("sent_ids", [])
-    if event_id in sent_ids:
-        return False
-    sent_ids.append(event_id)
-    if len(sent_ids) > 2000:
-        del sent_ids[:-2000]
-    save_state(state)
-    return True
+    with state_lock:
+        sent_ids = state.setdefault("sent_ids", [])
+        if event_id in sent_ids:
+            return False
+        sent_ids.append(event_id)
+        if len(sent_ids) > 2000:
+            del sent_ids[:-2000]
+        save_state(state)
+        return True
 
 
 def build_pending_event(item):
@@ -148,6 +200,7 @@ def deliver_event(state, event):
         log(f"[pagegate-watch] skip duplicate {event_id}")
         return
     out = send_notification(event)
+    update_health(last_send_ok_at=datetime.now().isoformat(timespec='seconds'))
     log(f"[pagegate-watch] delivered {event_id}")
     if out:
         log(f"[pagegate-watch] send result {out}")
@@ -163,34 +216,91 @@ def fetch_pending():
         return json.loads(resp.read().decode("utf-8"))
 
 
-def sync_pending(state):
+def sync_pending(state, reason: str = ""):
     try:
         data = fetch_pending()
+        update_health(last_pending_sync_at=datetime.now().isoformat(timespec='seconds'))
         if data.get("count", 0) == 0:
-            log("[pagegate-watch] no pending requests")
+            if reason:
+                log(f"[pagegate-watch] no pending requests ({reason})")
+            else:
+                log("[pagegate-watch] no pending requests")
             return
+        if reason:
+            log(f"[pagegate-watch] syncing {data.get('count', 0)} pending request(s) ({reason})")
         for item in data.get("pending", []):
             deliver_event(state, build_pending_event(item))
     except Exception as e:
-        log(f"[pagegate-watch] sync_pending failed: {e}")
+        suffix = f" ({reason})" if reason else ""
+        update_health(last_error=f"sync_pending failed{suffix}: {e}")
+        log(f"[pagegate-watch] sync_pending failed{suffix}: {e}")
+
+
+def maybe_sync_pending(state, last_sync_at: float, reason: str, force: bool = False) -> float:
+    now = time.monotonic()
+    if not force and pending_sync_interval_ms > 0 and now - last_sync_at < (pending_sync_interval_ms / 1000.0):
+        return last_sync_at
+    sync_pending(state, reason=reason)
+    return now
+
+
+def compute_reconnect_delay_ms(consecutive_failures: int, server_retry_ms: int) -> int:
+    base_ms = max(reconnect_base_ms, server_retry_ms)
+    exp_ceiling_ms = min(reconnect_max_ms, base_ms * (2 ** max(0, consecutive_failures - 1)))
+    jitter_floor_ms = max(1000, exp_ceiling_ms // 2)
+    return random.randint(jitter_floor_ms, exp_ceiling_ms)
+
+
+def pending_sync_loop(state):
+    if pending_sync_interval_ms <= 0:
+        return
+    jitter_ms = min(5000, max(0, pending_sync_interval_ms // 10))
+    while True:
+        sleep_ms = pending_sync_interval_ms
+        if jitter_ms > 0:
+            sleep_ms += random.randint(-jitter_ms, jitter_ms)
+        time.sleep(max(5, sleep_ms / 1000.0))
+        try:
+            sync_pending(state, reason="periodic")
+        except Exception as e:
+            update_health(last_error=f"periodic sync failed: {e}")
+            log(f"[pagegate-watch] periodic sync failed: {e}")
 
 
 def stream_events():
     state = load_state()
+    if pending_sync_interval_ms > 0:
+        threading.Thread(target=pending_sync_loop, args=(state,), daemon=True).start()
     first_loop = True
+    last_pending_sync_at = 0.0
+    consecutive_failures = 0
+    server_retry_ms = reconnect_base_ms
     while True:
-        if first_loop and sync_pending_on_start:
-            sync_pending(state)
+        if sync_pending_on_start and (first_loop or pending_sync_interval_ms > 0):
+            reason = "startup" if first_loop else "before-reconnect"
+            last_pending_sync_at = maybe_sync_pending(state, last_pending_sync_at, reason=reason, force=first_loop)
         first_loop = False
+        connected_at = time.monotonic()
+        update_health(
+            status="connecting",
+            last_connect_at=datetime.now().isoformat(timespec='seconds'),
+            consecutive_failures=consecutive_failures,
+        )
         try:
             url = base_url + "/api/events/stream"
             if state.get("last_event_id"):
                 url += "?last_event_id=" + quote(state["last_event_id"], safe="")
-            req = request.Request(
-                url,
-                headers={"Authorization": f"Bearer {api_token}", "Accept": "text/event-stream"},
-            )
-            with request.urlopen(req, timeout=60) as resp:
+            headers = {
+                "Authorization": f"Bearer {api_token}",
+                "Accept": "text/event-stream",
+                "Cache-Control": "no-cache",
+            }
+            if state.get("last_event_id"):
+                headers["Last-Event-ID"] = state["last_event_id"]
+            req = request.Request(url, headers=headers)
+            with request.urlopen(req, timeout=stream_read_timeout_sec) as resp:
+                consecutive_failures = 0
+                update_health(status="connected", consecutive_failures=0, last_error="")
                 event_type = None
                 data_lines = []
                 for raw_line in resp:
@@ -198,8 +308,10 @@ def stream_events():
                     if not line.strip():
                         if event_type and data_lines:
                             payload = json.loads("\n".join(data_lines))
-                            state["last_event_id"] = payload.get("id", state.get("last_event_id", ""))
-                            save_state(state)
+                            with state_lock:
+                                state["last_event_id"] = payload.get("id", state.get("last_event_id", ""))
+                                save_state(state)
+                            update_health(last_event_at=datetime.now().isoformat(timespec='seconds'))
                             deliver_event(state, payload)
                         event_type = None
                         data_lines = []
@@ -210,20 +322,53 @@ def stream_events():
                         event_type = line[7:]
                     elif line.startswith("data: "):
                         data_lines.append(line[6:])
+                    elif line.startswith("retry: "):
+                        try:
+                            server_retry_ms = max(1000, min(reconnect_max_ms, int(line[7:])))
+                        except ValueError:
+                            pass
                     elif line.startswith("id: "):
-                        state["last_event_id"] = line[4:]
-                        save_state(state)
+                        with state_lock:
+                            state["last_event_id"] = line[4:]
+                            save_state(state)
         except KeyboardInterrupt:
+            update_health(status="stopped")
             break
         except Exception as e:
+            connection_lifetime_ms = int((time.monotonic() - connected_at) * 1000)
+            if connection_lifetime_ms >= reconnect_reset_after_ms:
+                consecutive_failures = 0
+            consecutive_failures += 1
+            update_health(status="reconnecting", consecutive_failures=consecutive_failures, last_error=str(e))
             log(f"[pagegate-watch] reconnect after error: {e}")
-        time.sleep(reconnect_delay_ms / 1000.0)
+            if sync_pending_on_start:
+                last_pending_sync_at = maybe_sync_pending(state, last_pending_sync_at, reason="after-error")
+        else:
+            connection_lifetime_ms = int((time.monotonic() - connected_at) * 1000)
+            if connection_lifetime_ms >= reconnect_reset_after_ms:
+                consecutive_failures = 0
+            else:
+                consecutive_failures += 1
+                update_health(status="reconnecting", consecutive_failures=consecutive_failures)
+                log(f"[pagegate-watch] stream ended after {connection_lifetime_ms}ms; reconnecting")
+
+        delay_ms = compute_reconnect_delay_ms(consecutive_failures, server_retry_ms)
+        if verbose:
+            log(
+                f"[pagegate-watch] reconnect sleep {delay_ms}ms "
+                f"(failures={consecutive_failures}, server_retry={server_retry_ms})"
+            )
+        time.sleep(delay_ms / 1000.0)
 
 
 if __name__ == "__main__":
     try:
+        threading.Thread(target=health_heartbeat_loop, daemon=True).start()
+        update_health(status="starting", last_heartbeat_at=datetime.now().isoformat(timespec='seconds'))
         stream_events()
     except Exception as e:
+        update_health(status="fatal", last_error=str(e))
         log(f"[pagegate-watch] FATAL: {e}")
-        import sys
         sys.exit(1)
+    finally:
+        health_stop_event.set()

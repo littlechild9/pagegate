@@ -8,8 +8,8 @@ PageGate OpenClaw Skill 初始化向导
 3. 验证服务器连通性
 4. 识别 OpenClaw 通知通道配置
 5. 写入 .env 配置文件
-6. 启动 watcher 并发送测试消息
-7. 验证端到端通路
+6. 发送测试消息
+7. 注册 OpenClaw cron 保活任务
 """
 
 import json
@@ -30,12 +30,15 @@ ENV_FILE = SKILL_DIR / ".env"
 ENV_EXAMPLE = SKILL_DIR / ".env.example"
 WATCH_SCRIPT = SCRIPT_DIR / "pagegate_watch.py"
 START_WATCHER = SCRIPT_DIR / "start-watcher.sh"
+REGISTER_WATCH_CRON = SCRIPT_DIR / "register_watch_cron.py"
 
 # ── 默认值 ─────────────────────────────────────────────────────────
 DEFAULT_SERVER_URL = "http://115.190.148.77:8888"
 DEFAULT_CHANNEL = "openclaw-weixin"
 DEFAULT_LOG_FILE = "~/.openclaw/workspace/memory/pagegate-watch.log"
-DEFAULT_STATE_FILE = "/tmp/pagegate-watch-state.json"
+DEFAULT_STATE_FILE = "~/.openclaw/workspace/memory/pagegate-watch-state.json"
+DEFAULT_HEALTH_FILE = "~/.openclaw/workspace/memory/pagegate-watch-health.json"
+DEFAULT_PENDING_SYNC_MS = "60000"
 GITHUB_REPO = "https://github.com/littlechild9/pagegate"
 
 # ── 颜色 ──────────────────────────────────────────────────────────
@@ -126,7 +129,7 @@ def ask_choice(prompt, options):
 
 # ── Step 1: 选择服务器 ────────────────────────────────────────────
 def choose_server():
-    step(1, 6, "选择 PageGate 接入方式")
+    step(1, 7, "选择 PageGate 接入方式")
     print()
     mode = ask_choice("请选择", [
         (f"使用托管服务器（推荐，{DEFAULT_SERVER_URL}）", "hosted"),
@@ -267,7 +270,7 @@ def login_account(url, default_email=""):
 
 
 def configure_token(url, server_mode):
-    step(2, 6, "获取 PageGate API token")
+    step(2, 7, "获取 PageGate API token")
     print()
     info("这里会保存 PageGate API token。")
     if server_mode == "hosted":
@@ -303,7 +306,7 @@ def configure_token(url, server_mode):
 
 # ── Step 3: 验证连通性 ────────────────────────────────────────────
 def verify_connection(url, token):
-    step(3, 6, "验证服务器连通性")
+    step(3, 7, "验证服务器连通性")
     try:
         req = request.Request(
             url + "/api/pending",
@@ -333,7 +336,7 @@ def verify_connection(url, token):
 
 # ── Step 4: OpenClaw 通知通道配置 ─────────────────────────────────
 def configure_openclaw_channel():
-    step(4, 6, "配置 OpenClaw 通知通道")
+    step(4, 7, "配置 OpenClaw 通知通道")
     print()
 
     # 检测 openclaw CLI
@@ -398,9 +401,14 @@ def _discover_openclaw_channels():
                 config = json.load(f)
             # 提取通道相关信息
             if "channels" in config:
-                for ch in config["channels"]:
-                    name = ch.get("name", ch.get("type", "unknown"))
-                    channels.append(name)
+                channels_cfg = config["channels"]
+                if isinstance(channels_cfg, dict):
+                    channels.extend(sorted(channels_cfg.keys()))
+                elif isinstance(channels_cfg, list):
+                    for ch in channels_cfg:
+                        if isinstance(ch, dict):
+                            name = ch.get("name", ch.get("type", "unknown"))
+                            channels.append(name)
             if "gateway" in config:
                 gw = config["gateway"]
                 if isinstance(gw, dict):
@@ -425,10 +433,11 @@ def _discover_openclaw_channels():
 
 # ── Step 5: 写入 .env 文件 ────────────────────────────────────────
 def write_env_file(url, token, channel, target, account):
-    step(5, 6, "保存配置到 .env 文件")
+    step(5, 7, "保存配置到 .env 文件")
 
     log_file = ask("日志文件路径 (PAGEGATE_WATCH_LOG_FILE)", DEFAULT_LOG_FILE)
     state_file = ask("状态文件路径 (PAGEGATE_WATCH_STATE_FILE)", DEFAULT_STATE_FILE)
+    health_file = ask("健康文件路径 (PAGEGATE_WATCH_HEALTH_FILE)", DEFAULT_HEALTH_FILE)
 
     content = f"""# PageGate Watcher 环境变量
 # 由 setup.py 自动生成于 {time.strftime('%Y-%m-%d %H:%M:%S')}
@@ -446,6 +455,8 @@ OPENCLAW_NOTIFY_ACCOUNT={account}
 # 日志和状态
 PAGEGATE_WATCH_LOG_FILE={log_file}
 PAGEGATE_WATCH_STATE_FILE={state_file}
+PAGEGATE_WATCH_HEALTH_FILE={health_file}
+PAGEGATE_WATCH_PENDING_SYNC_MS={DEFAULT_PENDING_SYNC_MS}
 """
 
     if ENV_FILE.exists():
@@ -456,12 +467,12 @@ PAGEGATE_WATCH_STATE_FILE={state_file}
 
     ENV_FILE.write_text(content, encoding="utf-8")
     ok(f"配置已保存到 {ENV_FILE}")
-    return log_file
+    return log_file, health_file
 
 
 # ── Step 6: 测试通知发送 ──────────────────────────────────────────
 def test_notification(channel, target, account):
-    step(6, 6, "发送测试通知")
+    step(6, 7, "发送测试通知")
 
     if not shutil.which("openclaw"):
         warn("未检测到 openclaw CLI，跳过测试通知")
@@ -528,8 +539,61 @@ def test_notification(channel, target, account):
         return False
 
 
+def register_watch_keepalive_cron():
+    step(7, 7, "注册 OpenClaw cron 保活任务")
+
+    if not shutil.which("openclaw"):
+        warn("未检测到 openclaw CLI，跳过 cron 注册")
+        info("稍后可手动运行：")
+        info(f"  python3 {REGISTER_WATCH_CRON}")
+        return None
+
+    if not REGISTER_WATCH_CRON.exists():
+        warn(f"缺少 cron 注册脚本：{REGISTER_WATCH_CRON}")
+        return None
+
+    print()
+    info("推荐注册一个每分钟执行一次的 OpenClaw cron job。")
+    info("它会检查 watcher 的 health 文件和进程状态，必要时自动重启。")
+    if not ask_yn("现在注册这个 cron job 吗？"):
+        info("已跳过 cron 注册")
+        return None
+
+    python_bin = sys.executable or shutil.which("python3") or "python3"
+    try:
+        result = subprocess.run(
+            [python_bin, str(REGISTER_WATCH_CRON)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except Exception as e:
+        fail(f"注册 cron 失败: {e}")
+        return None
+
+    if result.returncode != 0:
+        fail("注册 cron 失败")
+        err = result.stderr.strip() or result.stdout.strip()
+        if err:
+            info(err[:500])
+        return None
+
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        payload = {}
+
+    job = payload.get("job", {})
+    action = payload.get("action", "updated")
+    ok(f"OpenClaw cron 已{action}: {job.get('name', 'PageGate Watcher Keepalive')}")
+    schedule = job.get("schedule", {})
+    if schedule.get("expr"):
+        info(f"调度: {schedule['expr']}")
+    return job
+
+
 # ── 完成提示 ──────────────────────────────────────────────────────
-def print_summary(url, test_ok, log_file):
+def print_summary(url, test_ok, log_file, cron_job):
     banner("初始化完成！")
     print()
 
@@ -542,6 +606,11 @@ def print_summary(url, test_ok, log_file):
         print(f"  {yellow('⚠')} 测试通知未发送或失败（可稍后重试）")
         print(f"  {green('✓')} .env 配置已保存")
 
+    if cron_job:
+        print(f"  {green('✓')} OpenClaw cron 保活已注册")
+    else:
+        print(f"  {yellow('⚠')} OpenClaw cron 保活未注册（可稍后补上）")
+
     print(f"""
 {bold('接下来你可以：')}
 
@@ -549,14 +618,17 @@ def print_summary(url, test_ok, log_file):
      cd {SKILL_DIR}
      ./scripts/start-watcher.sh
 
-  {cyan('2.')} 在 OpenClaw 中使用 pagegate-client skill:
+  {cyan('2.')} 注册或更新 OpenClaw cron 保活:
+     python3 {REGISTER_WATCH_CRON}
+
+  {cyan('3.')} 在 OpenClaw 中使用 pagegate-client skill:
      发送 "查看待审批" 查看待审批列表
      发送 "发布页面" 上传 HTML 页面
 
-  {cyan('3.')} 查看日志:
+  {cyan('4.')} 查看日志:
      tail -f {log_file}
 
-  {cyan('4.')} 重新运行初始化:
+  {cyan('5.')} 重新运行初始化:
      python3 {Path(__file__).resolve()}
 
 {bold('服务器地址:')} {url}
@@ -589,13 +661,16 @@ def main():
     channel, target, account = configure_openclaw_channel()
 
     # Step 5: 写入 .env
-    log_file = write_env_file(url, token, channel, target, account)
+    log_file, _health_file = write_env_file(url, token, channel, target, account)
 
     # Step 6: 测试通知
     test_ok = test_notification(channel, target, account)
 
+    # Step 7: 注册 cron 保活
+    cron_job = register_watch_keepalive_cron()
+
     # 完成
-    print_summary(url, test_ok, log_file)
+    print_summary(url, test_ok, log_file, cron_job)
 
 
 if __name__ == "__main__":

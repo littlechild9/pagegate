@@ -126,6 +126,8 @@ fi
 # 设置可执行权限
 chmod +x "$INSTALL_DIR/scripts/setup.py" 2>/dev/null || true
 chmod +x "$INSTALL_DIR/scripts/start-watcher.sh" 2>/dev/null || true
+chmod +x "$INSTALL_DIR/scripts/check-watcher.sh" 2>/dev/null || true
+chmod +x "$INSTALL_DIR/scripts/register_watch_cron.py" 2>/dev/null || true
 
 ok "Skill 安装完成！"
 printf "\n"

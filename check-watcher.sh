@@ -1,28 +1,25 @@
 #!/bin/bash
-# PageGate Watcher 看门狗脚本
-# 用法: 放入 crontab，每分钟运行一次
-# */1 * * * * /path/to/pagegate/check-watcher.sh
-#
-# 如果 watcher 进程不存在，就自动启动
+# 仓库根目录下的便捷入口。
+# 实际保活逻辑已经下沉到 openclaw-skill/scripts/check-watcher.sh，
+# 这样安装后的 skill 自己就能被 OpenClaw cron 直接调用。
+
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-WATCH_SCRIPT="$SCRIPT_DIR/openclaw-skill/scripts/pagegate_watch.py"
-LOG_FILE="$HOME/.openclaw/workspace/memory/pagegate-watch.log"
+INSTALLED_SKILL_DIR="${HOME}/.openclaw/workspace/skills/pagegate-client"
+REPO_SKILL_DIR="${SCRIPT_DIR}/openclaw-skill"
 
-# 检查进程是否在跑
-if ! pgrep -f "pagegate_watch.py" > /dev/null 2>&1; then
-    echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [watcher-keepalive] no watcher found, starting..." >> "$LOG_FILE"
-    
-    # 加载 .env
-    ENV_FILE="$SCRIPT_DIR/.env"
-    if [ -f "$ENV_FILE" ]; then
-        set -a
-        source "$ENV_FILE"
-        set +a
-    fi
-    
-    mkdir -p "$(dirname "$LOG_FILE")"
-    "$SCRIPT_DIR/venv/bin/python" "$WATCH_SCRIPT" >> "$LOG_FILE" 2>&1 &
-    
-    echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [watcher-keepalive] watcher started (PID: $!)" >> "$LOG_FILE"
+if [ -n "${PAGEGATE_WATCH_SKILL_DIR:-}" ]; then
+    CHECK_SCRIPT="${PAGEGATE_WATCH_SKILL_DIR}/scripts/check-watcher.sh"
+elif [ -f "${INSTALLED_SKILL_DIR}/scripts/check-watcher.sh" ]; then
+    CHECK_SCRIPT="${INSTALLED_SKILL_DIR}/scripts/check-watcher.sh"
+else
+    CHECK_SCRIPT="${REPO_SKILL_DIR}/scripts/check-watcher.sh"
 fi
+
+if [ ! -f "${CHECK_SCRIPT}" ]; then
+    printf 'error: check-watcher script not found: %s\n' "${CHECK_SCRIPT}" >&2
+    exit 1
+fi
+
+exec bash "${CHECK_SCRIPT}"

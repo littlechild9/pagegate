@@ -32,7 +32,7 @@ onboarding 的顺序必须是：
    - 如果服务器关闭注册，或用户明确说自己已经有 token，再让用户提供现有 `PageGate API token`
 4. 获取到 PageGate API token 后，再配置 OpenClaw 通知路由
 5. 保存 `.env`
-6. 启动 watcher
+6. 启动 watcher，并注册 keepalive cron
 
 `PAGEGATE_API_TOKEN` 保存的是 PageGate API token。托管服务器普通用户的注册 / 登录 token，或者自部署服务器上可用的访问 token，都放在这里。服务器配置里的 `admin_token` 只属于自部署服务器管理员，不属于普通用户 onboarding 输入项。
 
@@ -121,12 +121,19 @@ python3 scripts/setup.py
 
 # Start the watcher
 ./scripts/start-watcher.sh
+
+# Register the keepalive cron in OpenClaw (recommended)
+python3 scripts/register_watch_cron.py
 ```
 
 The launcher script:
 - Loads config from `.env` automatically
 - Uses `exec >> logfile 2>&1` to redirect all output — **critical**: stray stdout/stderr from background Python processes can crash the OpenClaw gateway exec listener
 - Kills any existing watcher process before starting fresh
+
+The keepalive helpers:
+- `scripts/check-watcher.sh` checks the health file, pid, and status, then restarts the watcher when needed
+- `scripts/register_watch_cron.py` creates or updates an OpenClaw cron job that runs `check-watcher.sh` every minute
 
 **Manual start** (if you prefer):
 
@@ -148,6 +155,7 @@ Optional environment:
 - `OPENCLAW_GATEWAY_URL`
 - `OPENCLAW_GATEWAY_TOKEN`
 - `PAGEGATE_WATCH_LOG_FILE`
+- `PAGEGATE_WATCH_HEALTH_FILE`
 
 The bridge watcher:
 
@@ -155,7 +163,8 @@ The bridge watcher:
 - deduplicates pending + stream events by event id,
 - rate-limits delivery,
 - forwards events through Gateway RPC `send` to the configured OpenClaw channel route,
-- writes diagnostics to a log file instead of noisy stdout by default.
+- writes diagnostics to a log file instead of noisy stdout by default,
+- updates a health file periodically so the keepalive job can detect stale or dead watchers.
 
 **Important**: OpenClaw's background exec listener is fragile — any stderr/stdout output from the watcher process can crash the gateway. Always use `>> file 2>&1` or the launcher script.
 
