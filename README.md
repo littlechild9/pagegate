@@ -54,23 +54,18 @@ PageGate 最重要的 feature 不是上传页面，而是实时授权。
 
 如果你只是想用起来，不要先研究部署。
 
-先把仓库拉到本地：
-
-```bash
-git clone https://github.com/littlechild9/pagegate.git
-cd pagegate
-```
-
 然后直接把下面这段话贴给 OpenClaw：
 
 ```text
-请在当前 pagegate 仓库里帮我配置 PageGate。
+请帮我配置 PageGate。
 
 要求：
 - 优先使用默认公共服务器 http://115.190.148.77:8888
 - 只使用 OpenClaw 的 SSE watcher，不要配置 webhook
 - 如果缺少公共服务器账号、PAGEGATE_ADMIN_TOKEN 或通知路由，请逐项向我询问
-- 帮我执行 openclaw-skill/install.sh，并按向导完成 setup.py
+- 先执行这个安装命令（它会从 GitHub 下载 skill 并进入安装流程）：
+  curl -fsSL https://raw.githubusercontent.com/littlechild9/pagegate/main/openclaw-skill/install.sh | bash
+- 如果安装脚本询问是否运行初始化向导，请选择 Y，并继续完成 setup.py
 - 配置完成后启动 watcher
 - 最后告诉我如何发布一个本地 HTML 页面
 ```
@@ -217,13 +212,15 @@ ${server.base_url}/auth/wechat/callback
 当你的自托管服务器准备好之后，继续把下面这段话贴给 OpenClaw，把域名和 token 换成你自己的：
 
 ```text
-请在当前 pagegate 仓库里帮我配置 PageGate。
+请帮我配置 PageGate。
 
 要求：
 - 使用我自托管的服务器 https://your-domain.com
 - 我的 PAGEGATE_ADMIN_TOKEN 是 <your-admin-token>
 - 只使用 OpenClaw 的 SSE watcher，不要配置 webhook
-- 帮我执行 openclaw-skill/install.sh，并按向导完成 setup.py
+- 先执行这个安装命令（它会从 GitHub 下载 skill 并进入安装流程）：
+  curl -fsSL https://raw.githubusercontent.com/littlechild9/pagegate/main/openclaw-skill/install.sh | bash
+- 如果安装脚本询问是否运行初始化向导，请选择 Y，并继续完成 setup.py
 - 配置完成后启动 watcher
 - 最后告诉我如何发布一个本地 HTML 页面
 ```
