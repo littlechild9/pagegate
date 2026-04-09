@@ -75,7 +75,7 @@
         <div class="spinner" id="spinner"></div>
         <h1>{{ page.title }}</h1>
         <p>你已通过钉钉登录，访问申请已自动提交</p>
-        <p style="color:#999;font-size:13px;">审批通过后页面会自动刷新，无需手动操作</p>
+        <p style="color:#999;font-size:13px;">审批通过后会自动进入页面，无需手动刷新</p>
 
         <div class="visitor-info">
             {% if visitor.avatar %}
@@ -92,6 +92,7 @@
         const statusEl = document.getElementById("status");
         const spinnerEl = document.getElementById("spinner");
         let approved = false;
+        let redirectScheduled = false;
         const startMs = Date.now();
 
         function elapsed() {
@@ -116,6 +117,12 @@
         }
         let updateTimerId = setInterval(updateTimer, 500);
 
+        function enterApprovedPage() {
+            const target = new URL(window.location.href);
+            target.searchParams.set("_approved", Date.now().toString());
+            window.location.replace(target.toString());
+        }
+
         function markApproved(latencyMs) {
             if (approved) return;
             approved = true;
@@ -125,10 +132,14 @@
             timerEl.style.background = "#2e7d32";
             timerEl.style.fontSize = "18px";
             timerEl.style.padding = "12px 24px";
-            statusEl.textContent = "已通过！页面将保持在此";
+            statusEl.textContent = "已通过，正在进入页面...";
             statusEl.className = "status approved";
             spinnerEl.style.display = "none";
             if (fallbackTimer) clearInterval(fallbackTimer);
+            if (!redirectScheduled) {
+                redirectScheduled = true;
+                setTimeout(enterApprovedPage, 300);
+            }
         }
 
         async function checkApproval() {
