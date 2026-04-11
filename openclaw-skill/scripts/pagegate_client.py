@@ -3,12 +3,16 @@ import argparse
 import json
 import mimetypes
 import os
+import shlex
 import sys
 import uuid
 from pathlib import Path
 from typing import Any, Optional
 from urllib import error, request
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+SKILL_DIR = SCRIPT_DIR.parent
+DEFAULT_ENV_FILE = SKILL_DIR / ".env"
 DEFAULT_RESULT_FILE = os.path.expanduser("~/.openclaw/workspace/memory/pagegate-client-result.json")
 _DEVNULL = open(os.devnull, "w", encoding="utf-8")
 sys.stdout = _DEVNULL
@@ -37,6 +41,35 @@ class JsonArgumentParser(argparse.ArgumentParser):
         fail(message, exit_code=2)
 
 
+def load_env_file() -> None:
+    env_file = Path(
+        os.environ.get("PAGEGATE_ENV_FILE", str(DEFAULT_ENV_FILE))
+    ).expanduser()
+    if not env_file.exists():
+        return
+
+    for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, raw_value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+
+        value = raw_value.strip()
+        if not value:
+            os.environ[key] = ""
+            continue
+
+        try:
+            parsed = shlex.split(value, posix=True)
+            os.environ[key] = parsed[0] if parsed else ""
+        except ValueError:
+            os.environ[key] = value
+
+
 def env(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
@@ -56,6 +89,8 @@ def parse_json(body: str) -> Any:
     except json.JSONDecodeError:
         return None
 
+
+load_env_file()
 
 BASE_URL = env("PAGEGATE_URL")
 API_TOKEN = env("PAGEGATE_API_TOKEN")

@@ -37,8 +37,13 @@ Ask and resolve values in this order:
 
 3. **OpenClaw notify route**
    - Required: `OPENCLAW_NOTIFY_CHANNEL`, `OPENCLAW_NOTIFY_TARGET`, `OPENCLAW_NOTIFY_ACCOUNT`
-   - Use defaults or discovered values when available.
-   - If any route field is missing, ask for it explicitly.
+   - Always tell the user which route you discovered before applying it.
+   - If more than one channel exists, do not silently pick one. Show the detected channels and ask the user to confirm which channel PageGate notifications should go to.
+   - If the current chat session already exposes a concrete route, prefer that exact route first:
+     `channel + target + account`.
+   - Read back the detected route in one line and ask for confirmation, for example:
+     `我识别到当前会话路由是 openclaw-weixin / o9cq...@im.wechat / 0d37...-im-bot，要用这个作为 PageGate 通知通道吗？`
+   - If any route field is still missing, ask for just that missing field explicitly.
 
 4. **Apply config non-interactively**
    - After collecting values, call:
@@ -51,15 +56,17 @@ bash scripts/pagegate_onboard.sh \
   --api-token 'token-if-using-token-mode' \
   --notify-channel openclaw-weixin \
   --notify-target '<target-id>' \
-  --notify-account '<account-id>' \
-  --start-watcher
+  --notify-account '<account-id>'
 ```
 
 Notes:
 - For `auth-mode=quick-register`, provide `--pagegate-name`. The server will create the account and return the API token directly.
 - For `auth-mode=token`, omit `--pagegate-name` and provide `--api-token`.
+- `--notify-channel`, `--notify-target`, and `--notify-account` may be omitted only when the helper has already discovered the current OpenClaw session route and you have shown that detected route to the user for confirmation.
+- The helper now starts the watcher by default. You do not need to pass `--start-watcher`.
+- Only pass `--no-start-watcher` when the user explicitly wants onboarding without a running watcher.
 - Add `--send-test` only after the user agrees to receive a test notification.
-- The script writes `.env`, saves the API token and PageGate metadata to disk, clears `.onboarding-pending`, verifies PageGate access, optionally starts the watcher, and returns a single JSON result.
+- The script writes `.env`, saves the API token and PageGate metadata to disk, clears `.onboarding-pending`, verifies PageGate access, starts the watcher by default, and returns a single JSON result.
 
 When asking for `--pagegate-name`, prefer wording like:
 
@@ -71,6 +78,8 @@ When asking for `--pagegate-name`, prefer wording like:
 
 5. **Explain the result in chat**
    - Confirm the server URL, whether watcher started, and whether a test message was sent.
+   - Explicitly show which notify route was finally used: `channel / target / account`.
+   - If the helper says the route came from discovery, say that clearly so the user can spot mismatches immediately.
    - Explicitly show the user their `PageGate API token` once onboarding succeeds, and remind them it has already been saved into `.env`.
    - Explicitly show the generated `username` when the server returns one.
    - Explicitly show both the personal `PageGate URL` (`/<username>`) and the `dashboard URL`, and remind the user that both have already been saved into `.env`.
@@ -105,10 +114,16 @@ Preferred launcher:
 
 The watcher must keep stdout/stderr away from OpenClaw exec channels. Diagnostics belong in the log file only.
 
-If watcher keepalive is needed after onboarding:
-- Keep the decision in chat. The main agent should decide whether to enable it.
-- Do not present cron registration as a mandatory local terminal step to the user.
-- When the main agent chooses to enable it, it may call `bash scripts/register_watch_cron.sh`.
+After onboarding succeeds:
+- By default, start the watcher.
+- By default, recommend enabling keepalive cron as well, unless the user clearly wants a one-off local test without background keepalive.
+- Keep the decision in chat. The main agent should explain that keepalive cron is recommended for reliable approval notifications.
+- Do not dump cron internals onto the user as a manual setup chore. The main agent can decide and run it directly.
+- Recommended follow-up command:
+
+```bash
+bash scripts/register_watch_cron.sh
+```
 
 The keepalive helpers:
 - `scripts/check-watcher.sh` checks the health file, pid, and status, then restarts the watcher when needed

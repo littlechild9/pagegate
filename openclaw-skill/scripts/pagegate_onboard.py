@@ -26,7 +26,6 @@ DEFAULT_STATE_FILE = '~/.openclaw/workspace/memory/pagegate-watch-state.json'
 DEFAULT_HEALTH_FILE = '~/.openclaw/workspace/memory/pagegate-watch-health.json'
 DEFAULT_PENDING_SYNC_MS = '60000'
 DEFAULT_SERVER_URL = 'http://115.190.148.77:8888'
-DEFAULT_CHANNEL = 'openclaw-weixin'
 KEEPALIVE_CRON_COMMAND = 'bash scripts/register_watch_cron.sh'
 
 
@@ -87,7 +86,12 @@ def request_json(base_url, path, token):
 
 
 def discover_openclaw_config():
-    result = {'channels': [], 'account': '', 'gateway_url': ''}
+    result = {
+        'channels': [],
+        'account': '',
+        'gateway_url': '',
+        'current_route': {},
+    }
 
     config_path = Path.home() / '.openclaw' / 'openclaw.json'
     if config_path.exists():
@@ -108,6 +112,42 @@ def discover_openclaw_config():
         except Exception:
             pass
 
+    sessions_path = Path.home() / '.openclaw' / 'agents' / 'main' / 'sessions' / 'sessions.json'
+    if sessions_path.exists():
+        try:
+            sessions = json.loads(sessions_path.read_text(encoding='utf-8'))
+            best_key = ''
+            best_updated_at = -1
+            best_session = None
+            for session_key, session_info in sessions.items():
+                if not isinstance(session_info, dict):
+                    continue
+                delivery = session_info.get('deliveryContext')
+                if not isinstance(delivery, dict):
+                    continue
+                channel = delivery.get('channel')
+                target = delivery.get('to')
+                if not channel or not target:
+                    continue
+                updated_at = int(session_info.get('updatedAt') or 0)
+                if updated_at > best_updated_at:
+                    best_updated_at = updated_at
+                    best_key = session_key
+                    best_session = session_info
+            if best_session:
+                delivery = best_session.get('deliveryContext') or {}
+                result['current_route'] = {
+                    'sessionKey': best_key,
+                    'channel': delivery.get('channel', ''),
+                    'target': delivery.get('to', ''),
+                    'account': delivery.get('accountId', '') or '',
+                    'updatedAt': best_updated_at,
+                }
+                if not result['account']:
+                    result['account'] = result['current_route'].get('account', '')
+        except Exception:
+            pass
+
     auth_path = Path.home() / '.openclaw' / 'identity' / 'device-auth.json'
     if auth_path.exists():
         try:
@@ -116,11 +156,78 @@ def discover_openclaw_config():
         except Exception:
             pass
 
+    weixin_accounts_path = Path.home() / '.openclaw' / 'openclaw-weixin' / 'accounts.json'
+    if not result['account'] and weixin_accounts_path.exists():
+        try:
+            account_ids = json.loads(weixin_accounts_path.read_text(encoding='utf-8'))
+            if isinstance(account_ids, list) and account_ids:
+                result['account'] = str(account_ids[0])
+        except Exception:
+            pass
+
+    if result['current_route'] and not result['current_route'].get('account'):
+        result['current_route']['account'] = result['account']
+
     return result
+
+
+def resolve_notify_route(args, discovered):
+    current_route = discovered.get('current_route') or {}
+    discovered_channels = discovered.get('channels') or []
+    channel = (args.notify_channel or '').strip()
+    target = (args.notify_target or '').strip()
+    account = (args.notify_account or '').strip()
+
+    if not channel:
+        channel = current_route.get('channel', '')
+    if not channel and len(discovered_channels) == 1:
+        channel = str(discovered_channels[0])
+
+    if not target:
+        target = current_route.get('target', '')
+
+    if not account:
+        account = current_route.get('account', '') or (discovered.get('account') or '')
+
+    missing = []
+    if not channel:
+        missing.append('notify channel')
+    if not target:
+        missing.append('notify target')
+    if not account:
+        missing.append('notify account')
+    if missing:
+        fail(
+            'Missing notify route information',
+            exit_code=2,
+            missing=missing,
+            discovered=discovered,
+        )
+
+    route_source = 'explicit'
+    if (
+        channel == current_route.get('channel', '')
+        and target == current_route.get('target', '')
+        and account == (current_route.get('account', '') or discovered.get('account', ''))
+    ):
+        route_source = 'current_session'
+    elif not args.notify_channel or not args.notify_target or not args.notify_account:
+        route_source = 'discovered'
+
+    return {
+        'channel': channel,
+        'target': target,
+        'account': account,
+        'source': route_source,
+    }
 
 
 def shell_env_value(value):
     return shlex.quote(str(value))
+
+
+def shell_path_env_value(value):
+    return shell_env_value(Path(value).expanduser())
 
 
 def backup_existing_env():
@@ -160,9 +267,9 @@ PAGEGATE_DASHBOARD_URL={shell_env_value(pagegate_dashboard_url)}
 OPENCLAW_NOTIFY_CHANNEL={shell_env_value(channel)}
 OPENCLAW_NOTIFY_TARGET={shell_env_value(target)}
 OPENCLAW_NOTIFY_ACCOUNT={shell_env_value(account)}
-PAGEGATE_WATCH_LOG_FILE={shell_env_value(log_file)}
-PAGEGATE_WATCH_STATE_FILE={shell_env_value(state_file)}
-PAGEGATE_WATCH_HEALTH_FILE={shell_env_value(health_file)}
+PAGEGATE_WATCH_LOG_FILE={shell_path_env_value(log_file)}
+PAGEGATE_WATCH_STATE_FILE={shell_path_env_value(state_file)}
+PAGEGATE_WATCH_HEALTH_FILE={shell_path_env_value(health_file)}
 PAGEGATE_WATCH_PENDING_SYNC_MS={shell_env_value(pending_sync_ms)}
 """
     ENV_FILE.write_text(content, encoding='utf-8')
@@ -303,8 +410,8 @@ def send_test_message(channel, target, account, gateway_url=''):
 
 def build_keepalive_cron_prompt():
     return (
-        "如果你判断这个 watcher 需要 keepalive cron，请由 OpenClaw 主 agent 在聊天流里决定是否启用，"
-        f"然后再运行 `{KEEPALIVE_CRON_COMMAND}`。不要把 cron 注册当成安装脚本或本地向导的默认步骤。"
+        "onboarding 完成后，默认建议启用 watcher keepalive cron，除非用户明确只做一次性本地测试。"
+        f"请由 OpenClaw 主 agent 在聊天流里说明这是推荐项，然后运行 `{KEEPALIVE_CRON_COMMAND}`。"
     )
 
 
@@ -316,19 +423,24 @@ parser.add_argument('--username')
 parser.add_argument('--email')
 parser.add_argument('--password')
 parser.add_argument('--api-token')
-parser.add_argument('--notify-channel', default=DEFAULT_CHANNEL)
-parser.add_argument('--notify-target', required=True)
-parser.add_argument('--notify-account', required=True)
+parser.add_argument('--notify-channel')
+parser.add_argument('--notify-target')
+parser.add_argument('--notify-account')
 parser.add_argument('--log-file', default=DEFAULT_LOG_FILE)
 parser.add_argument('--state-file', default=DEFAULT_STATE_FILE)
 parser.add_argument('--health-file', default=DEFAULT_HEALTH_FILE)
 parser.add_argument('--pending-sync-ms', default=DEFAULT_PENDING_SYNC_MS)
-parser.add_argument('--start-watcher', action='store_true')
+watcher_group = parser.add_mutually_exclusive_group()
+watcher_group.add_argument('--start-watcher', dest='start_watcher', action='store_true')
+watcher_group.add_argument('--no-start-watcher', dest='start_watcher', action='store_false')
+parser.set_defaults(start_watcher=True)
 parser.add_argument('--send-test', action='store_true')
 
 
 def main():
     args = parser.parse_args()
+    discovered = discover_openclaw_config()
+    notify_route = resolve_notify_route(args, discovered)
 
     if args.auth_mode == 'quick-register' and not args.pagegate_name:
         fail('--pagegate-name is required for auth-mode=quick-register', exit_code=2)
@@ -359,9 +471,9 @@ def main():
     backup = write_env(
         url,
         token,
-        args.notify_channel,
-        args.notify_target,
-        args.notify_account,
+        notify_route['channel'],
+        notify_route['target'],
+        notify_route['account'],
         args.log_file,
         args.state_file,
         args.health_file,
@@ -378,15 +490,14 @@ def main():
     if args.start_watcher:
         watcher_started = start_watcher()
 
-    config = discover_openclaw_config()
     test_sent = False
     test_detail = ''
     if args.send_test:
         test_sent, test_detail = send_test_message(
-            args.notify_channel,
-            args.notify_target,
-            args.notify_account,
-            config.get('gateway_url', ''),
+            notify_route['channel'],
+            notify_route['target'],
+            notify_route['account'],
+            discovered.get('gateway_url', ''),
         )
 
     emit({
@@ -397,14 +508,15 @@ def main():
         'envFile': str(ENV_FILE),
         'envBackupFile': backup,
         'onboardingMarkerCleared': not ONBOARDING_MARKER.exists(),
-        'notifyChannel': args.notify_channel,
-        'notifyTarget': args.notify_target,
-        'notifyAccount': args.notify_account,
+        'notifyChannel': notify_route['channel'],
+        'notifyTarget': notify_route['target'],
+        'notifyAccount': notify_route['account'],
+        'notifyRouteSource': notify_route['source'],
         'verify': verify_detail,
         'watcherStarted': watcher_started,
         'testSent': test_sent,
         'testDetail': test_detail,
-        'discovered': config,
+        'discovered': discovered,
         'pagegateName': resolved_pagegate_name,
         'username': resolved_username,
         'pagegateUrl': resolved_pagegate_url,

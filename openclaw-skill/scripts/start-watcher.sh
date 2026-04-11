@@ -15,6 +15,7 @@ SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 WATCH_SCRIPT="$SCRIPT_DIR/pagegate_watch.py"
 ENV_FILE="$SKILL_DIR/.env"
 DEFAULT_LOG_FILE="$HOME/.openclaw/workspace/memory/pagegate-watch.log"
+DEFAULT_LOCK_DIR="$HOME/.openclaw/workspace/memory/pagegate-watch-launcher.lock"
 
 if [ -f "$ENV_FILE" ]; then
     set -a
@@ -24,13 +25,52 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 LOG_FILE="${PAGEGATE_WATCH_LOG_FILE:-$DEFAULT_LOG_FILE}"
-mkdir -p "$(dirname "$LOG_FILE")"
+LOCK_DIR="${PAGEGATE_WATCH_LOCK_DIR:-$DEFAULT_LOCK_DIR}"
+LOCK_PID_FILE="$LOCK_DIR/pid"
+mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$LOCK_DIR")"
 
 # 从这里开始，脚本不再向 OpenClaw exec 通道输出任何内容。
 exec </dev/null >> "$LOG_FILE" 2>&1
 
 log() {
     printf '[%s] [pagegate-watch] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$1"
+}
+
+cleanup_lock() {
+    local owner_pid=""
+    if [ -f "$LOCK_PID_FILE" ]; then
+        owner_pid="$(cat "$LOCK_PID_FILE" 2>/dev/null || true)"
+    fi
+    if [ "$owner_pid" = "$$" ]; then
+        rm -rf "$LOCK_DIR"
+    fi
+}
+
+acquire_lock() {
+    local owner_pid=""
+    while true; do
+        if mkdir "$LOCK_DIR" 2>/dev/null; then
+            printf '%s\n' "$$" > "$LOCK_PID_FILE"
+            trap cleanup_lock EXIT INT TERM HUP
+            log "launcher lock acquired"
+            return 0
+        fi
+
+        if [ -f "$LOCK_PID_FILE" ]; then
+            owner_pid="$(cat "$LOCK_PID_FILE" 2>/dev/null || true)"
+        else
+            owner_pid=""
+        fi
+
+        if [ -n "$owner_pid" ] && kill -0 "$owner_pid" 2>/dev/null; then
+            log "another launcher is already running (pid=$owner_pid), exiting"
+            exit 0
+        fi
+
+        log "removing stale launcher lock"
+        rm -rf "$LOCK_DIR"
+        sleep 1
+    done
 }
 
 if [ -n "${PAGEGATE_WATCH_PYTHON:-}" ]; then
@@ -45,6 +85,8 @@ else
     log "python3 or python is required to start pagegate_watch.py"
     exit 1
 fi
+
+acquire_lock
 
 # 杀掉已有 watcher
 log "stopping existing watcher"
