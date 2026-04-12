@@ -37,12 +37,13 @@ Ask and resolve values in this order:
 
 3. **OpenClaw notify route**
    - Required: `OPENCLAW_NOTIFY_CHANNEL`, `OPENCLAW_NOTIFY_TARGET`, `OPENCLAW_NOTIFY_ACCOUNT`
-   - Always tell the user which route you discovered before applying it.
-   - If more than one channel exists, do not silently pick one. Show the detected channels and ask the user to confirm which channel PageGate notifications should go to.
-   - If the current chat session already exposes a concrete route, prefer that exact route first:
-     `channel + target + account`.
-   - Read back the detected route in one line and ask for confirmation, for example:
-     `我识别到当前会话路由是 openclaw-weixin / o9cq...@im.wechat / 0d37...-im-bot，要用这个作为 PageGate 通知通道吗？`
+   - The preferred method is a handshake from the exact channel the user wants to receive notifications in.
+   - Generate a very short challenge in the format `pagegateNN`, where `NN` is two digits, for example `pagegate42`.
+   - Ask the user to send that exact short phrase from the target channel first.
+   - Then call the helper with `--notify-handshake pagegate42` so it can resolve the route from the message that actually arrived in OpenClaw.
+   - After the helper resolves the route, read it back in one line and ask for confirmation, for example:
+     `我识别到通知路由是 openclaw-weixin / o9cq...@im.wechat / 0d37...-im-bot，要用这个吗？`
+   - Only fall back to current-session auto-discovery when the handshake path is unavailable or the user explicitly wants to skip it.
    - If any route field is still missing, ask for just that missing field explicitly.
 
 4. **Apply config non-interactively**
@@ -54,15 +55,15 @@ bash scripts/pagegate_onboard.sh \
   --auth-mode quick-register|token \
   --pagegate-name "Xuan's PageGate" \
   --api-token 'token-if-using-token-mode' \
-  --notify-channel openclaw-weixin \
-  --notify-target '<target-id>' \
-  --notify-account '<account-id>'
+  --notify-handshake pagegate42
 ```
 
 Notes:
 - For `auth-mode=quick-register`, provide `--pagegate-name`. The server will create the account and return the API token directly.
 - For `auth-mode=token`, omit `--pagegate-name` and provide `--api-token`.
+- `--notify-handshake pagegateNN` is the preferred route-binding path.
 - `--notify-channel`, `--notify-target`, and `--notify-account` may be omitted only when the helper has already discovered the current OpenClaw session route and you have shown that detected route to the user for confirmation.
+- If the user already gave an exact route manually, you may still pass `--notify-channel`, `--notify-target`, and `--notify-account` directly instead of using handshake.
 - The helper now starts the watcher by default. You do not need to pass `--start-watcher`.
 - Only pass `--no-start-watcher` when the user explicitly wants onboarding without a running watcher.
 - Add `--send-test` only after the user agrees to receive a test notification.

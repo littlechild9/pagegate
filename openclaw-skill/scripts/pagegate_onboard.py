@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import datetime
 import json
 import os
 import shlex
@@ -26,6 +27,7 @@ DEFAULT_STATE_FILE = '~/.openclaw/workspace/memory/pagegate-watch-state.json'
 DEFAULT_HEALTH_FILE = '~/.openclaw/workspace/memory/pagegate-watch-health.json'
 DEFAULT_PENDING_SYNC_MS = '60000'
 DEFAULT_SERVER_URL = 'http://115.190.148.77:8888'
+DEFAULT_NOTIFY_HANDSHAKE_MAX_AGE_SEC = 900
 KEEPALIVE_CRON_COMMAND = 'bash scripts/register_watch_cron.sh'
 
 
@@ -85,12 +87,113 @@ def request_json(base_url, path, token):
         return parsed if parsed is not None else {'ok': True, 'raw': body}
 
 
-def discover_openclaw_config():
+def parse_event_timestamp(value):
+    if not value:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        if text.endswith('Z'):
+            text = text[:-1] + '+00:00'
+        return datetime.datetime.fromisoformat(text).timestamp()
+    except ValueError:
+        return None
+
+
+def extract_message_text(content):
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        text = content.get('text')
+        if isinstance(text, str):
+            return text
+        nested = content.get('content')
+        return extract_message_text(nested)
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            text = extract_message_text(item)
+            if text:
+                parts.append(text)
+        return '\n'.join(parts)
+    return ''
+
+
+def find_handshake_route(handshake, sessions):
+    token = (handshake or '').strip().lower()
+    if not token:
+        return {}
+
+    now = time.time()
+    cutoff = now - DEFAULT_NOTIFY_HANDSHAKE_MAX_AGE_SEC
+    best = None
+
+    for session_key, session_info in sessions.items():
+        if not isinstance(session_info, dict):
+            continue
+        delivery = session_info.get('deliveryContext')
+        if not isinstance(delivery, dict):
+            continue
+        channel = delivery.get('channel')
+        target = delivery.get('to')
+        session_file = session_info.get('sessionFile')
+        if not channel or not target or not session_file:
+            continue
+
+        session_path = Path(session_file).expanduser()
+        if not session_path.exists():
+            continue
+
+        try:
+            lines = session_path.read_text(encoding='utf-8').splitlines()
+        except Exception:
+            continue
+
+        for raw_line in lines:
+            try:
+                entry = json.loads(raw_line)
+            except Exception:
+                continue
+
+            if entry.get('type') != 'message':
+                continue
+
+            message = entry.get('message') or {}
+            if message.get('role') != 'user':
+                continue
+
+            text = extract_message_text(message.get('content')).strip()
+            if not text or token not in text.lower():
+                continue
+
+            ts = parse_event_timestamp(entry.get('timestamp'))
+            if ts is not None and ts < cutoff:
+                continue
+
+            candidate = {
+                'sessionKey': session_key,
+                'channel': channel,
+                'target': target,
+                'account': delivery.get('accountId', '') or '',
+                'matchedText': text,
+                'matchedAt': ts or 0,
+            }
+            if best is None or candidate['matchedAt'] >= best['matchedAt']:
+                best = candidate
+
+    return best or {}
+
+
+def discover_openclaw_config(notify_handshake=''):
     result = {
         'channels': [],
         'account': '',
         'gateway_url': '',
         'current_route': {},
+        'handshake_route': {},
     }
 
     config_path = Path.home() / '.openclaw' / 'openclaw.json'
@@ -116,6 +219,7 @@ def discover_openclaw_config():
     if sessions_path.exists():
         try:
             sessions = json.loads(sessions_path.read_text(encoding='utf-8'))
+            result['handshake_route'] = find_handshake_route(notify_handshake, sessions)
             best_key = ''
             best_updated_at = -1
             best_session = None
@@ -167,16 +271,32 @@ def discover_openclaw_config():
 
     if result['current_route'] and not result['current_route'].get('account'):
         result['current_route']['account'] = result['account']
+    if result['handshake_route'] and not result['handshake_route'].get('account'):
+        result['handshake_route']['account'] = result['account']
 
     return result
 
 
 def resolve_notify_route(args, discovered):
     current_route = discovered.get('current_route') or {}
+    handshake_route = discovered.get('handshake_route') or {}
     discovered_channels = discovered.get('channels') or []
     channel = (args.notify_channel or '').strip()
     target = (args.notify_target or '').strip()
     account = (args.notify_account or '').strip()
+    handshake = (args.notify_handshake or '').strip()
+
+    if not (channel or target or account) and handshake:
+        if not handshake_route:
+            fail(
+                'Notify handshake route not found',
+                exit_code=2,
+                notifyHandshake=handshake,
+                discovered=discovered,
+            )
+        channel = handshake_route.get('channel', '')
+        target = handshake_route.get('target', '')
+        account = handshake_route.get('account', '') or (discovered.get('account') or '')
 
     if not channel:
         channel = current_route.get('channel', '')
@@ -205,7 +325,13 @@ def resolve_notify_route(args, discovered):
         )
 
     route_source = 'explicit'
-    if (
+    if handshake and handshake_route and (
+        channel == handshake_route.get('channel', '')
+        and target == handshake_route.get('target', '')
+        and account == (handshake_route.get('account', '') or discovered.get('account', ''))
+    ):
+        route_source = 'handshake'
+    elif (
         channel == current_route.get('channel', '')
         and target == current_route.get('target', '')
         and account == (current_route.get('account', '') or discovered.get('account', ''))
@@ -426,6 +552,7 @@ parser.add_argument('--api-token')
 parser.add_argument('--notify-channel')
 parser.add_argument('--notify-target')
 parser.add_argument('--notify-account')
+parser.add_argument('--notify-handshake')
 parser.add_argument('--log-file', default=DEFAULT_LOG_FILE)
 parser.add_argument('--state-file', default=DEFAULT_STATE_FILE)
 parser.add_argument('--health-file', default=DEFAULT_HEALTH_FILE)
@@ -439,7 +566,7 @@ parser.add_argument('--send-test', action='store_true')
 
 def main():
     args = parser.parse_args()
-    discovered = discover_openclaw_config()
+    discovered = discover_openclaw_config(args.notify_handshake)
     notify_route = resolve_notify_route(args, discovered)
 
     if args.auth_mode == 'quick-register' and not args.pagegate_name:
@@ -511,6 +638,7 @@ def main():
         'notifyChannel': notify_route['channel'],
         'notifyTarget': notify_route['target'],
         'notifyAccount': notify_route['account'],
+        'notifyHandshake': args.notify_handshake or '',
         'notifyRouteSource': notify_route['source'],
         'verify': verify_detail,
         'watcherStarted': watcher_started,
